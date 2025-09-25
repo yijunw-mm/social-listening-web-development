@@ -8,7 +8,7 @@ router = APIRouter()
 kw_model = KeyBERT(model='all-MiniLM-L6-v2')
 
 # load data
-df_chat = pd.read_csv("data/processing_output/cleaned_chat_dataframe.csv")
+df_chat = pd.read_csv("data/processing_output/cleaned_chat_df_dec.csv")
 df_kw = pd.read_csv("data/other_data/general_kw_list.csv")
 keyword_list = df_kw['keywords'].tolist()
 
