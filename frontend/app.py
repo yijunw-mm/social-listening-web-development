@@ -2,7 +2,9 @@
 
 import streamlit as st
 import pandas as pd
-
+import api_client as api
+import matplotlib.pyplot as plt
+import altair as alt
 
 
 st.set_page_config(page_title="Data Viaulization Dashboard", layout="wide")
@@ -187,9 +189,6 @@ section[data-testid="stSidebar"] {
     font-size: 0.9rem;
     font-family: 'Inter', sans-serif;
 }
-
-
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -218,6 +217,7 @@ with st.sidebar:
     if st.button("Search"):
         if search_query:
             st.success(f"Searching for '{search_query}'...")
+            # Here you would typically call your backend API to perform the search
         else:
             st.error("Please enter a valid search query.")
 
@@ -231,55 +231,239 @@ with st.sidebar:
 
 tab1, tab2, tab3, tab4= st.tabs(["📈 General", "📊  Brand", "Time Comparison ", "Brand Comparison"])
 
+#TAB 1 - General Analysis
+custom_colors = [
+    "#C990B8",  # Viola (theme primary)
+    "#28A3D4",  # Cyan
+    "#F6C90E",  # Yellow
+    "#A7C7E7",  # Soft Light Blue
+    "#6270A2",  # Indigo/Navy
+    "#FF7B72",  # Coral
+    "#8FD694",  # Mint Green
+    "#FFB347",  # Orange
+    "#9B6BDF",  # Purple
+    "#E57373",  # Soft Red
+    "#6DD3CE",  # Aqua Green
+    "#FFD166",  # Amber
+    "#EF476F",  # Bright Pink
+    "#06D6A0",  # Teal Green
+    "#118AB2",  # Blue
+    "#073B4C",  # Deep Navy
+    "#F9844A",  # Warm Orange
+    "#43AA8B",  # Sage Green
+    "#90BE6D",  # Olive
+    "#577590",  # Steel Blue
+]
+
+#render chart
+def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""):
+    import altair as alt
+    if df.empty:
+        st.warning("No keyword data returned.")
+        return None
+    bar_color = st.color_picker("Pick a color for the bars", "#A7C7E7",key=f"{key_prefix}_color")
+    if chart_type == "Bar Chart":
+        return (
+            alt.Chart(df)
+            .mark_bar(color=bar_color)
+            .encode(
+                x=alt.X(x_field, axis=alt.Axis(title=x_field.capitalize(), labelAngle=-45, labelOverlap=False)),
+                y=alt.Y(y_field, axis=alt.Axis(title="Frequency"))
+            )
+        )
+    elif chart_type == "Pie Chart":
+        return (
+            alt.Chart(df)
+            .mark_arc()
+            .encode(
+                theta=alt.Theta(field=y_field, type="quantitative"),
+                color=alt.Color(field=x_field, type="nominal",scale = alt.Scale(range=custom_colors)),
+                tooltip=[x_field, y_field]
+            )
+        )
+#def manage keywords 
+def manage_keywords(session_key, placeholder):
+    if session_key not in st.session_state:
+        st.session_state[session_key] = []
+
+    search_keyword = st.text_input("Search more keywords", key=f"input_{session_key}")
+
+    if st.button("Add", key=f"add_{session_key}"):
+        if search_keyword and search_keyword not in st.session_state[session_key]:
+            st.session_state[session_key].append(search_keyword)
+        elif search_keyword in st.session_state[session_key]:
+            placeholder.warning(f"'{search_keyword}' is already in the list.")
+        else:
+            placeholder.error("Please enter a valid search query.")
+
+    if st.session_state[session_key]:
+        st.markdown("**Added Keywords:**")
+        for kw in st.session_state[session_key]:
+            if st.button(f"{kw} ╳", key=f"remove_{session_key}_{kw}"):
+                st.session_state[session_key].remove(kw)
+                st.success(f"Removed '{kw}'")
+                st.rerun()
+
+#THIS IS TAB 1 - General Analysis
 with tab1:
     st.markdown(
     "<h4 style='text-align: center;'>Whole Chat Analysis</h4>", 
     unsafe_allow_html=True)
+
+    #KEYWORD FREQUENCY
+    with st.container(border=True):
+        st.write("Keyword Frequency")
+        left_placeholder = st.empty() #left empty placeholder for backend to send final chart
+
+        #selecting chart type 
+        col1, col2 = st.columns(2)
+        with col1:
+            option = st.selectbox(
+                "Select chart type",
+                ("Bar Chart", "Pie Chart"),
+                key="chart1_type",
+                index = 0
+            )
+            chart_type = st.session_state.chart1_type
+        with col2: 
+            time_range = st.select_slider(
+                "Select time frame",
+                options=["1 month", "3 months", "6 months", "9 months", "1 year"],
+                value = "1 year",
+                key="time_frame1"
+            )
+            params = None
+            if time_range == "1 month":
+                params = {"month":1}
+            elif time_range == "3 months":
+                params = {"quarter":1}
+            elif time_range == "6 months":
+                params = {"quarter":2}
+            elif time_range == "9 months":
+                params = {"quarter":3}
+            else: 
+                params = None
+            selected_tf1 = st.session_state.time_frame1
+        try:
+            df = api.get_keyword_frequency(params=params)
+            chart = render_chart(df, option, "keyword", "count",key_prefix="chart1")
+            if chart: 
+                left_placeholder.altair_chart(chart, use_container_width=True)
+        except Exception as e:
+            st.error(f"Failed to fetch data: {e}")
+
+    #NEW KEYWORDS PREDICTION
+    st.markdown("---")
+    with st.container(border=True):
+        st.write("New Keywords Prediction")
+        right_placeholder = st.empty()
+        col1, col2 = st.columns(2)
+        with col1:
+            option2 = st.selectbox(
+                    "Select chart type",
+                    ("Bar Chart", "Pie Chart"),
+                    key="chart2_type",
+                    index = 0
+                )
+            chart_type2 = st.session_state.chart2_type
+        with col2:
+            top_n = st.slider(
+                "Select number of top keywords",
+                min_value=5,
+                max_value=20,
+                value=10,
+                step = 5,
+                key="top_n",
+            )  
+            selected_topn = st.session_state.top_n
+        with st.spinner("Fetching new keyword predictions..."):
+            try:
+                df2 = api.new_keywords(top_k=top_n)
+                chart = render_chart(df2,option2, "keyword", "score",key_prefix="chart2")
+                if chart: 
+                    right_placeholder.altair_chart(chart, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Failed to fetch data: {e}")
+
+
+#TAB2 - Brand Analysis
+with tab2:
+    st.markdown(
+    "<h4 style='text-align: center;'>Brand Analysis</h4>", 
+    unsafe_allow_html=True)
+
+    brand_name = st.selectbox(
+        "Select Brand",
+        ("MamyPoko", "Huggies", "Pampers","Drypers","Merries","OffsprinG","Rascal & Friends","Applecrumby","Hey Tiger",
+        "Nino Nana"),
+        key="brand_select"
+    )
+    st.write(f"You selected: {brand_name}")
 
     with st.container(border=True):
         st.write("Keyword Frequency")
         left_placeholder = st.empty() #left empty placeholder for backend to send final chart
 
         #selecting chart type 
-        option = st.selectbox(
-            "Select chart type",
-            ("Bar Chart", "Line Chart", "Pie Chart"),
-            key="chart_type"
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            option = st.selectbox(
+                "Select chart type",
+                ("Bar Chart","Pie Chart"),
+                key="chart3_type"
+            )
+            chart_type = st.session_state.chart3_type
+        with col2:
+            time_range = st.select_slider(
+                "Select time frame",
+                options=["1 month", "3 months", "6 months", "9 months", "1 year"],
+                key="time_frame2"
+            )
+            time_range = st.session_state.time_frame2
+        search_key = st.empty()
+
+        manage_keywords("keywords_brand", search_key)
 
         #mock data for testing
         df = pd.DataFrame({"Keyword": ["apple", "banana", "cherry"], "Count": [10, 20, 15]})
         left_placeholder.bar_chart(df.set_index("Keyword"))
 
 
-        if "keyword1" not in st.session_state:
-            st.session_state["keywords"]= []
-        search_keyword = st.text_input("Search more keywords", key="keyword1")
-        if st.button("Add", key="search1"):
-            if search_keyword and search_keyword not in st.session_state.keywords:
-                st.session_state.keywords.append(search_keyword)
-            elif search_keyword in st.session_state.keywords:
-                left_placeholder.warning(f"'{search_keyword}' is already in the list.")
-            else:
-                left_placeholder.error("Please enter a valid search query.")
-
-        if st.session_state.keywords:
-            st.markdown("**Added Keywords:**")
-            for kw in st.session_state.keywords:
-                # Render each keyword as a button
-                if st.button(f"{kw } &nbsp; ╳", key=f"remove_{kw}"):
-                    st.session_state.keywords.remove(kw)
-                    st.success(f"Removed '{kw}'")
-                    st.rerun()
-    st.markdown("---")
     with st.container(border=True):
-        st.write(" Trend Analysis")
-        right_placeholder = st.empty()
+        st.write("Sentiment Analysis")
+        right_placeholder = st.empty()  
+        #selecting chart type
+        col1, col2 = st.columns(2)
+        with col1:
+            option = st.selectbox(
+                "Select chart type",
+                ("Bar Chart","Pie Chart"),
+                key="chart4_type"
+            )
+            chart_type = st.session_state.chart4_type
+        with col2:
+            time_range = st.select_slider(
+                "Select time frame",
+                options=["1 month", "3 months", "6 months", "9 months", "1 year"],
+                key="time_frame3"
+            )
+            time_range = st.session_state.time_frame3
+        
+    with st.container(border = True):
+        st.write("Consumer Perception Analysis")
+        bottom_placeholder = st.empty()
+        #selecting chart type
         option = st.selectbox(
             "Select chart type",
-            ("Bar Chart", "Line Chart", "Pie Chart"),
-            key="charttype"
+            ("Bar Chart","Pie Chart"),
+            key="chart5_type"
         )
+        chart_type = st.session_state.chart5_type
+
+        
+
+
 
 
 
