@@ -8,7 +8,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
 
 router = APIRouter()
-df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_df_dec.csv")
+df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_nov_new.csv")
 
 # load brand keywrod
 brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv")  
@@ -20,11 +20,17 @@ custom_keywords_dict = {brand: set() for brand in brand_keyword_dict}
 @router.get("/brand/keyword-frequency")
 def keyword_frequency(
     brand_name: str,
+    group_id:Optional[str]=None,
+    year: Optional[int] = None,
     month: Optional[int] = None,
     quarter: Optional[int] = None
 ):
     # Step 1 filter dataframe
     df = df_cleaned.copy()
+    if group_id:
+        df = df[df["group_id"]==group_id]
+    if year:
+        df = df[df["year"]==year]
     if month:
         df = df[df["month"] == month]
     if quarter:
@@ -69,11 +75,17 @@ analyzer = SentimentIntensityAnalyzer()
 @router.get("/brand/sentiment-analysis")
 def brand_sentiment_analysis_vader(
     brand_name: str,
+    group_id: Optional[str] = None,
+    year: Optional[int] =None,
     month: Optional[int] = None,
     quarter: Optional[int] = None
 ):
     # 1. get data
     df = df_cleaned.copy()
+    if group_id:
+        df = df[df["group_id"] == group_id]
+    if year:
+        df = df[df["year"] == year]
     if month:
         df = df[df["month"] == month]
     if quarter:
@@ -143,7 +155,22 @@ def compute_co_occurrence_matrix(texts, top_k=20):
     return result
 
 @router.get("/brand/consumer-perception")
-def consumer_perception(brand_name: str, top_k: int = 20):
+def consumer_perception(brand_name: str, 
+                        group_id:Optional[str]=None,
+                        year: Optional[int] = None,
+                        month: Optional[int] = None,
+                        quarter: Optional[int] = None,
+                        top_k: int = 20):
+    df = df_cleaned.copy()
+    if group_id:
+        df = df[df["group_id"] == group_id]
+    if year:
+        df = df[df["year"] == year]
+    if month:
+        df = df[df["month"] == month]
+    if quarter:
+        df = df[df["quarter"] == quarter]
+
     if brand_name not in brand_keyword_dict:
         return {"error": f"Brand '{brand_name}' not found."}
     

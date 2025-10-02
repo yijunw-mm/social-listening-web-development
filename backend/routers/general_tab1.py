@@ -15,11 +15,14 @@ keyword_list = df_kw['keywords'].tolist()
 
 @router.get("/keyword-frequency")
 def keyword_frequency(group_id: Optional[str] = None,
+                      year: Optional[int] = None,
                       month: Optional[int] = None,
                       quarter: Optional[int] = None):
     df = df_chat
     if group_id:
         df = df[df["group_id"] == group_id]
+    if year:
+        df = df[df["year"]== year]
     if month:
         df = df[df["month"]== month]
     if quarter:
@@ -34,6 +37,7 @@ def keyword_frequency(group_id: Optional[str] = None,
 
 @router.get("/new-keyword-prediction")
 def new_keyword_prediction(group_id: Optional[str] = None,
+                           year: Optional[int]=None,
                            month: Optional[int] = None,
                            quarter: Optional[int] = None,
                            top_k: int = 20):
@@ -41,6 +45,8 @@ def new_keyword_prediction(group_id: Optional[str] = None,
     df = df_chat
     if group_id:
         df = df[df["group_id"] == group_id]
+    if year:
+        df = df[df["year"]== year]
     if month:
         df = df[df["month"]== month]
     if quarter:
