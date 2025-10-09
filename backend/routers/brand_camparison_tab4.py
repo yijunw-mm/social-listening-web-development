@@ -15,7 +15,7 @@ brand_category_map = {
 brand_list = list(brand_category_map.keys())
 
 
-@router.get("/brand/share-of-voice")
+@router.get("/category/share-of-voice")
 def get_share_of_voice():
     df = df_cleaned.copy()
 
@@ -36,15 +36,18 @@ def get_share_of_voice():
     result = {}
     for category, brand_counts in category_counts.items():
         total =sum(brand_counts.values())
-        brand_percentage={
-            brand: round(count/total*100,1)
+        brand_percentage_list=[{
+            "brand":brand,"percentage": round(count/total*100,1)}
             for brand, count in brand_counts.items()
-        }
+        ]
+        count_list =[
+            {"brand":brand,"count":count} for brand, count in brand_counts.items()
+        ]
 
         result[category]={
             "total_mentions": total,
-            "share_of_voice": brand_percentage,
-            "original_count": dict(brand_counts)
+            "share_of_voice": brand_percentage_list,
+            "original_count": count_list
         }
 
     return result
@@ -72,30 +75,7 @@ category_brand_map=defaultdict(list)
 for brand, cat in brand_category_map.items():
     category_brand_map[cat].append(brand)
 
-@router.get("/brand/category-perception")
-def category_perception(category: str, top_k: int = 20):
-    category = category.lower()
-    #category_brands = [b for b, cat in brand_category_map.items() if cat ==category]
-    #if not category_brands:
-    if category not in category_brand_map:
-        return {"error": f"category '{category}' not found"}
-    result={}
-    for brand in category_brand_map[category]:
-        matched_texts = df_cleaned[
-            df_cleaned["clean_text"].str.contains(rf"\b{brand}\b", case=False, na=False)
-        ]["clean_text"].tolist()
-
-        if not matched_texts:
-            result[brand] = {"associated_words": []}
-        else:
-            associated_words = compute_co_occurrence_matrix(matched_texts, top_k)
-            result[brand] = {"associated_words": associated_words}
-
-
-    return {
-        "category": category,
-        "brand_perception": result
-    }
+#-----------------------------------------
 
 brand_keyword_dict = df_cat.groupby("brand")["keyword"].apply(list).to_dict()
 @router.get("/category/consumer-perception")
@@ -120,11 +100,11 @@ def category_consumer_perception(category_name:str, top_k:int=20):
                 }
 
     associated_words = compute_co_occurrence_matrix(relevant_texts, top_k=top_k)
-    share_counts={}
+    share_counts=[]
     for brand in brand_in_category:
         brand_keywords = [kw.lower() for kw in brand_keyword_dict.get(brand,[])]
         brand_texts =[t for t in relevant_texts if any(kw in t.lower() for kw in brand_keywords)]
-        share_counts[brand] = len(brand_texts)
+        share_counts.append({"brand":brand,"count":len(brand_texts)})
     return {"category": category_name, 
             "associated_words": associated_words,
             "share-of-voice":share_counts}

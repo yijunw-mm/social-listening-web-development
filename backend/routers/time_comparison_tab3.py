@@ -46,7 +46,9 @@ def compare_keyword_frequency(
             for kw in keywords:
                 if kw.lower() in text.lower():
                     counter[kw] += 1
-        return dict(counter)
+        #convert to list
+        #return dict(counter)
+        return [{"keyword":k,"count":v} for k,v in counter.items()]
 
     return {
         "brand": brand_name,
@@ -95,10 +97,10 @@ def keyword_frequency(
                 counts["neutral"] += 1
         total = sum(counts.values())
         percent = {k: round(v / total * 100, 1) if total > 0 else 0 for k, v in counts.items()}
+        count_list=[{"sentiment":k,"count":v,"percentage":percent[k]} for k,v in counts.items()]
         return {
             "total_mentions": total,
-            "sentiment_count": counts,
-            "sentiment_percent": percent
+            "sentiment_detail":count_list
         }
 
     # 5. analyze two time periods
