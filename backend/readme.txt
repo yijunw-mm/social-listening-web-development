@@ -8,7 +8,7 @@ quarter=3,    take from [1,4]
 
 http://127.0.0.1:8000/new-keyword-prediction
 
-========Tab===========
+========Tab3===========
 keyword frequency across time 
 http://127.0.0.1:8000/brand/time-compare/frequency
 parameter:
