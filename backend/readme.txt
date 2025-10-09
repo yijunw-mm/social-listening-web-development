@@ -8,7 +8,7 @@ quarter=3,    take from [1,4]
 
 http://127.0.0.1:8000/new-keyword-prediction
 
-========Tab===========
+========Tab3===========
 keyword frequency across time 
 http://127.0.0.1:8000/brand/time-compare/frequency
 parameter:
@@ -18,3 +18,11 @@ time1, corresponding time integer
 time2, corresponding time integer
 example:
 http://127.0.0.1:8000/brand/time-compare/frequency?brand_name=huggies&granularity=month&time1=6&time2=7
+
+sentiment analysis across time
+http://127.0.0.1:8000/brand/time-compare/sentiment
+parameter:
+brand_name
+granularity
+time1
+time2
