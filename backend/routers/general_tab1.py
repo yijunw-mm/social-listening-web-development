@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query
-from typing import Optional
+from typing import Optional, List 
 import pandas as pd
 from keybert import KeyBERT
 from collections import Counter
@@ -16,7 +16,7 @@ keyword_list = df_kw['keywords'].tolist()
 @router.get("/keyword-frequency")
 def keyword_frequency(group_id: Optional[str] = None,
                       year: Optional[int] = None,
-                      month: Optional[int] = None,
+                      month: Optional[List[int]] = Query(None),
                       quarter: Optional[int] = None):
     df = df_chat
     if group_id:
@@ -24,7 +24,7 @@ def keyword_frequency(group_id: Optional[str] = None,
     if year:
         df = df[df["year"]== year]
     if month:
-        df = df[df["month"]== month]
+        df = df[df["month"].isin(month)]
     if quarter:
         df = df[df["quarter"]== quarter]
     

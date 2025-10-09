@@ -22,7 +22,7 @@ def keyword_frequency(
     brand_name: str,
     group_id:Optional[str]=None,
     year: Optional[int] = None,
-    month: Optional[int] = None,
+    month: Optional[List[int]] = Query(None),
     quarter: Optional[int] = None
 ):
     # Step 1 filter dataframe
@@ -32,7 +32,7 @@ def keyword_frequency(
     if year:
         df = df[df["year"]==year]
     if month:
-        df = df[df["month"] == month]
+        df = df[df["month"].isin(month)]
     if quarter:
         df = df[df["quarter"] == quarter]
 
@@ -77,7 +77,7 @@ def brand_sentiment_analysis_vader(
     brand_name: str,
     group_id: Optional[str] = None,
     year: Optional[int] =None,
-    month: Optional[int] = None,
+    month: Optional[List[int]] = Query(None),
     quarter: Optional[int] = None
 ):
     # 1. get data
@@ -87,7 +87,7 @@ def brand_sentiment_analysis_vader(
     if year:
         df = df[df["year"] == year]
     if month:
-        df = df[df["month"] == month]
+        df = df[df["month"].isin(month)]
     if quarter:
         df = df[df["quarter"] == quarter]
 
@@ -124,15 +124,17 @@ def brand_sentiment_analysis_vader(
             "sentiment_count": {}
         }
 
-    sentiment_percent = {
-        k: round(v / total * 100, 1) for k, v in sentiment_result.items()
-    }
-
+    sentiment_percent_list = [{
+        "sentiment":k,"value": round(v / total * 100, 1)} for k, v in sentiment_result.items()
+    ]
+    sentiment_count_list =[
+        {"sentiment":k, "value":v} for k,v in sentiment_result.items()
+    ]
     return {
         "brand": brand_name,
         "total_mentions": total,
-        "sentiment_percent": sentiment_percent,
-        "sentiment_count": sentiment_result
+        "sentiment_percent": sentiment_percent_list,
+        "sentiment_count": sentiment_count_list
     }
 
 def compute_co_occurrence_matrix(texts, top_k=20):
