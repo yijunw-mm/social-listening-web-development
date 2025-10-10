@@ -118,3 +118,67 @@ def keyword_frequency(
         "compare": result
     }
 
+#------share of voice--------
+@router.get("/category/time-compare/share-of-voice")
+def category_share_of_voice_compare(
+    category_name: str,
+    granularity: Literal["year", "month", "quarter"],
+    time1: int,
+    time2: int
+):
+    #find the category
+    df_cat = pd.read_csv("data/other_data/newest_brand_keywords.csv")
+    brand_category_map = {
+    str(row["brand"]).strip().lower(): str(row["category"]).strip()
+    for _, row in df_cat.iterrows()
+    }
+    brand_in_category = [b for b, c in brand_category_map.items() if c == category_name]
+    if not brand_in_category:
+        return {"error": f"category '{category_name}' not found"}
+
+    df = df_cleaned.copy()
+
+
+    def filter_df(df: pd.DataFrame, time: int):
+        if granularity == "year":
+            return df[df["year"] == time]
+        elif granularity == "month":
+            y, m = divmod(time, 100)   # 202508 → 2025, 8
+            return df[(df["year"] == y) & (df["month"] == m)]
+        elif granularity == "quarter":
+            y, q = divmod(time, 10)    # 20252 → 2025, Q2
+            return df[(df["year"] == y) & (df["quarter"] == q)]
+        else:
+            raise ValueError("Invalid granularity")
+
+
+    # --- count share of voice ---
+    def compute_share(df_subset: pd.DataFrame):
+        texts = df_subset["clean_text"].dropna().tolist()
+        brand_counts = []
+        total = 0
+        for brand in brand_in_category:
+            keywords = [kw.lower() for kw in brand_keyword_dict.get(brand, [])]
+            count = sum(1 for t in texts if any(kw in t.lower() for kw in keywords))
+            brand_counts.append({"brand": brand, "count": count})
+            total += count
+        # add percentage
+        for item in brand_counts:
+            item["percent"] = round(item["count"] / total * 100, 1) if total > 0 else 0
+        return {"total_mentions": total, "share": brand_counts}
+
+
+    #analyze two time periods
+    df1 = filter_df(df, time1)
+    df2 = filter_df(df, time2)
+
+
+    result = {
+        "category": category_name,
+        "granularity": granularity,
+        "compare": {
+            str(time1): compute_share(df1),
+            str(time2): compute_share(df2)
+        }
+    }
+    return result

@@ -6,9 +6,10 @@ import re
 import pandas as pd
 from typing import Tuple, List
 from datetime import datetime
+import calendar
 
 
-def extract_group_id(file_name: str) -> str:
+def extract_group_name(file_name: str) -> str:
     """
     from zip file name extract group ID, e.g. 2025 DEC SG Mummys
     """
@@ -31,13 +32,26 @@ def read_zip_and_extract_txt(zip_path: str) -> Tuple[str, str]:
             chat_text = TextIOWrapper(file,encoding='utf-8').readlines()
             #chat_text = file.read().decode("utf-8")
 
-    group_id = extract_group_id(os.path.basename(zip_path))
-    return group_id, chat_text
+    group_name = extract_group_name(os.path.basename(zip_path))
+    return group_name, chat_text
 
-def parse_txt_lines(lines, group_id):
+#--get group id
+def normalize_group_id(group_name):
+    """2025 DEC Mummys->202512"""
+    match = re.match(r"(\d{4})\s+([A-Za-z]+)", group_name.strip())
+    if not match:
+        return None
+    year = int(match.group(1))
+    month_str = match.group(2).title() #DEC->Dec
+    if month_str not in calendar.month_abbr:
+        return None
+    month = list(calendar.month_abbr).index(month_str)  # DEC->12
+    return f"{year}{month:02d}"
+
+def parse_txt_lines(lines, group_name):
     pattern = re.compile(r"\[(.*?)\]\s*~\s*(.*?):\s*(.*)")
     records = []
-
+    norm_id = normalize_group_id(group_name)
     for line in lines:
         
         match = pattern.match(line)
@@ -48,8 +62,8 @@ def parse_txt_lines(lines, group_id):
                 continue 
             if str(user).strip().lower() in str(message).strip().lower():
                 continue
-            records.append({"datetime": dt, "user": user.strip(), 
-                            "text": message.strip(),"group_id":group_id})
+            records.append({"datetime": dt, "user": user.strip(), "group_id":norm_id,
+                            "text": message.strip(),"group_name":group_name})
             
     return records
 
@@ -79,6 +93,6 @@ if __name__ == "__main__":
 
 df_chats = process_multiple_zips("data/chat_zip")
 
-output_path = "data/processing_output/structured_chat.csv"
+output_path = "data/processing_output/structured_chat2.csv"
 df_chats.to_csv(output_path,index=False)
 print(f"save to {output_path}")
