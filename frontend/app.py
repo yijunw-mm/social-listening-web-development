@@ -1,11 +1,14 @@
 '''main page for forntend display'''
 
+from datetime import datetime
+import calendar
 import streamlit as st
 import pandas as pd
 import api_client as api
 import matplotlib.pyplot as plt
 import altair as alt
 from style import apply_custom_style
+import numpy as np
 
 
 st.set_page_config(page_title="Data Viaulization Dashboard", layout="wide")
@@ -28,6 +31,26 @@ def set_active_tab(label):
 
 with st.sidebar:
     st.title("Social Listening")
+
+    st.markdown("---") 
+    st.write("Select Data Files")
+    try: 
+        response = api.group_chat()
+        groups = response.get("groups", [])
+        if not groups:
+            st.warning("No data groups available.")
+        else:
+            selected_group =[]
+            for grp in groups:
+                gid = grp["id"]
+                checked = st.checkbox(f"Group {gid}" ,key=f"chk_{gid}")
+                if checked: 
+                    selected_group.append(gid)
+            st.session_state["selected_groups"] = selected_group
+            st.caption(f"{len(selected_group)} groups selected")
+    except Exception as e:
+        st.error(f"Failed to fetch data groups: {e}")
+    st.markdown("---")
 
     # Upload card
     st.markdown('<div class="stContainer">', unsafe_allow_html=True)
@@ -64,6 +87,7 @@ with st.sidebar:
     st.button("🔒 Logout")
 
 
+
 #TAB 1 - General Analysis
 custom_colors = [
     "#C990B8",  # Viola (theme primary)
@@ -94,12 +118,23 @@ sentiment_colors = {
     "negative": "#E57373"   # Red
 }
 
+
+#group ids
+def get_selected_group_ids(params: dict = None) -> dict:
+    params = params.copy() if params else {}
+    selected_group = st.session_state.get("selected_groups", [])
+    if selected_group:
+        params["group_id"] = ",".join(map(str, selected_group))
+    return params
+
 #render chart
 def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""):
     import altair as alt
     if df.empty:
         st.warning("No keyword data returned.")
         return None
+    
+    df = df.sort_values(by=y_field, ascending=False).copy()
     if chart_type =="Bar Chart" and "time_period" in df.columns and "x_field" != "time_period":
         df_plot = df.copy()
         df_plot["time_period"] = df_plot["time_period"].astype(str)
@@ -107,47 +142,154 @@ def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""
         x_label = x_field.capitalize() if x_field != "sentiment" else "Sentiment"
         y_label = "Mentions" if y_field == "count" else y_field.capitalize()
 
-        return (
+        chart = (
             alt.Chart(df_plot)
             .mark_bar()
             .encode(
                 x=alt.X(f"{x_field}:N",
-                        axis=alt.Axis(title=x_label, labelAngle=-35, labelOverlap=False)),
+                        sort="-y",
+                        axis=alt.Axis(title=x_label, labelAngle=-35, labelLimit =0, labelOverlap=False)),
                 y=alt.Y(f"{y_field}:Q", axis=alt.Axis(title=y_label)),
                 color=alt.Color("time_period:N", title="Period"),
                 xOffset="time_period:N",
                 tooltip=[x_field, "time_period", y_field]
             )
-            .properties(height=400)
         )
+        text = (
+            alt.Chart(df_plot)
+            .mark_text(align="center", baseline="bottom", dy=-3, color="white")
+            .encode(
+                x=alt.X(f"{x_field}:N"),
+                y=alt.Y(f"{y_field}:Q"),
+                text=alt.Text(f"{y_field}:Q", format=".2f")
+            )
+        )
+
+        return (chart + text).properties(height=400)
 
     if chart_type == "Bar Chart":
         bar_color = st.color_picker("Pick a color for the bars", "#A7C7E7",key=f"{key_prefix}_color")
-        return (
+        chart = (
             alt.Chart(df)
             .mark_bar(color=bar_color)
             .encode(
-                x=alt.X(x_field, axis=alt.Axis(title=x_field.capitalize(), labelAngle=-45, labelOverlap=False)),
-                y=alt.Y(y_field, axis=alt.Axis(title="Frequency"))
-            )
-        )
-    elif chart_type == "Pie Chart":
-
-        if set(df[x_field].str.lower()) >= {"positive", "neutral", "negative"}:
-            color_scale = alt.Scale(domain=["positive", "neutral", "negative"],
-            range=[sentiment_colors["positive"], sentiment_colors["neutral"], sentiment_colors["negative"]])
-        else: 
-            color_scale = alt.Scale(range=custom_colors)
-
-        return (
-            alt.Chart(df)
-            .mark_arc()
-            .encode(
-                theta=alt.Theta(field=y_field, type="quantitative"),
-                color=alt.Color(field=x_field, type="nominal",scale = color_scale),
+                x=alt.X(f"{x_field}:N",
+                        sort="-y",
+                        axis=alt.Axis(title=x_field.capitalize(), labelAngle=-45, labelLimit=0,labelOverlap=False)),
+                y=alt.Y(f"{y_field}:Q",
+                        axis=alt.Axis(title=y_field.capitalize())),
                 tooltip=[x_field, y_field]
             )
         )
+        text = (
+            alt.Chart(df)
+            .mark_text(align="center", baseline="middle", dy=-6, color="white")
+            .encode(
+                x=alt.X(f"{x_field}:N", sort="-y"),
+                y=alt.Y(f"{y_field}:Q"),
+                text=alt.Text(f"{y_field}:Q", format=".2f")
+            )
+        )
+        return (chart + text).properties(height=400)
+    elif chart_type == "Pie Chart":
+        # --- handle missing values and compute percentages ---
+        df = df.dropna(subset=[x_field, y_field]).copy()
+        df["percent"] = (df[y_field] / df[y_field].sum() * 100).round(1)
+        df["label"] = df[x_field] + " (" + df["percent"].astype(str) + "%)"
+
+        # --- color mapping (for sentiment or generic) ---
+        if set(df[x_field].str.lower()) >= {"positive", "neutral", "negative"}:
+            color_scale = alt.Scale(
+                domain=["positive", "neutral", "negative"],
+                range=[sentiment_colors["positive"], sentiment_colors["neutral"], sentiment_colors["negative"]]
+            )
+        else:
+            color_scale = alt.Scale(range=custom_colors)
+
+        # --- compute mid-angles for each slice ---
+        df["cumsum"] = df[y_field].cumsum()
+        df["middle_angle"] = (df["cumsum"] - df[y_field] / 2) / df[y_field].sum() * 2 * np.pi
+
+        num_slices = len(df)
+        outer_r = 180  
+        if num_slices <= 3:
+            label_r = outer_r * 0.5
+        elif num_slices <= 6:
+            label_r = outer_r * 0.8
+        else:
+            label_r = outer_r * 0.9
+
+        df["x"] = df["middle_angle"].apply(lambda a: label_r *np.cos(a - np.pi / 2))
+        df["y"] = df["middle_angle"].apply(lambda a: label_r *np.sin(a - np.pi / 2))
+
+        # --- Base pie chart ---
+        pie = (
+            alt.Chart(df)
+            .mark_arc(outerRadius=180)
+            .encode(
+                theta=alt.Theta(field=y_field, type="quantitative"),
+                color=alt.Color(field=x_field, type="nominal", scale=color_scale, title=x_field.capitalize()),
+                tooltip=[
+                    alt.Tooltip(x_field, title=x_field.capitalize()),
+                    alt.Tooltip(y_field, title="Value"),
+                    alt.Tooltip("percent:Q", title="Percentage", format=".1f")
+                ],
+            )
+        )
+
+        # --- Text layer with custom positions ---
+        text = (
+            alt.Chart(df)
+            .mark_text(size=13, color="white",stroke="white")
+            .encode(
+                x= alt.X("x:Q",axis=None),
+                y= alt.Y("y:Q",axis = None),
+                text="label:N"
+            )
+            .transform_filter(alt.datum.percent > 4)
+        )
+
+        return (pie + text).properties(height=420)
+
+
+
+    else:
+        st.error("Unsupported chart type selected.")
+        return None
+
+    
+#TIME RANGE SELECTOR
+def time_range_selector(label,key):
+
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        month_options = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        start,end = st.select_slider(
+            "Select month or quarter",
+            options=month_options,
+            value=("Jan", "Dec"),
+            key=f"{key}_month_range"
+
+        )
+        start_idx = month_options.index(start) + 1
+        end_idx = month_options.index(end) + 1
+        quarter_map = {1:1, 1:1, 2:1, 3:2, 4:2, 5:2, 6:2, 7:3, 8:3, 9:3, 10:4, 11:4, 12:4}
+        same_quarter = (quarter_map[start_idx] == quarter_map[end_idx])
+    with col2:
+        year = st.number_input("Year", min_value=2000, max_value=2100, value=datetime.now().year, step=1, key=f"{key}_year_input")
+
+    if start_idx == 1 and end_idx == 12:
+        return {"year": year}
+    if start_idx == end_idx:
+        return {"month": start_idx, "year": year}
+    if same_quarter:
+        return {"quarter": quarter_map[start_idx], "year": year}
+    if (start_idx, end_idx) in [(1,3),(4,6),(7,9),(10,12)]:
+        return {"quarter": quarter_map[start_idx], "year": year}
+    else:
+        return {"year": year, "month": list(range(start_idx, end_idx + 1))}
+
+
 #def manage keywords 
 def manage_keywords(placeholder, session_key, brand_name):
     if session_key not in st.session_state:
@@ -185,6 +327,11 @@ def manage_keywords(placeholder, session_key, brand_name):
                             st.rerun()
                         except Exception as e:
                             st.error(f"Failed to remove '{kw}': {e}")
+def build_stage_params(stage: str, time_range: dict) -> dict:
+    params = time_range.copy() if time_range else {}
+    if stage and stage.lower() != "none":
+        params["stage"] = stage
+    return params
 
 
 #THIS IS TAB 1 - General Analysis
@@ -199,7 +346,10 @@ with tab1:
         with st.container(border=True):
             st.write("Keyword Frequency")
             left_placeholder = st.empty() 
-
+            
+            stage = st.selectbox("Select Stage", ("None","Pregnant","Pre-Pregnancy","Infant/Preschool","Weaning","Preschool","Enrinchment","Other"), key="stage_select", index=0)
+            if stage == "None":
+                params = {}
             #selecting chart type 
             col1, col2 = st.columns(2)
             with col1:
@@ -211,30 +361,13 @@ with tab1:
                 )
                 chart_type = st.session_state.chart1_type
             with col2:
-                c1, c2 = st.columns([2,1])
-                with col1: 
-                    month_options = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-                    start_month, end_month = st.select_slider(
-                        "Select month range",
-                        options=month_options,
-                        value=("Jan", "Dec"),
-                        key="month_range"
-                    )
-                with c2:
-                    year = st.number_input("Year", min_value=2000, max_value=2100, value=2025, step=1, key="year_input")
-                params = None
-                # if time_range == "1 month":
-                #     params = {"month":1}
-                # elif time_range == "3 months":
-                #     params = {"quarter":1}
-                # elif time_range == "6 months":
-                #     params = {"quarter":2}
-                # elif time_range == "9 months":
-                #     params = {"quarter":3}
-                # else: 
-                #     params = None
-                # selected_tf1 = st.session_state.time_frame1
+                   time_range = time_range_selector("Time",key="time1")
+            if time_range:
+                params = build_stage_params(stage, time_range)
+            else: 
+                params = build_stage_params(stage)
             try:
+                params = get_selected_group_ids(params)
                 df = api.get_keyword_frequency(params=params)
                 chart = render_chart(df, option, "keyword", "count",key_prefix="chart1")
                 if chart: 
@@ -266,9 +399,11 @@ with tab1:
                     key="top_n",
                 )  
                 selected_topn = st.session_state.top_n
+            params2 = {"top_k": top_n}
+            params2 = get_selected_group_ids(params2)
             with st.spinner("Fetching new keyword predictions..."):
                 try:
-                    df2 = api.new_keywords(top_k=top_n)
+                    df2 = api.new_keywords(params=params2)
                     chart = render_chart(df2,option2, "keyword", "score",key_prefix="chart2")
                     if chart: 
                         right_placeholder.altair_chart(chart, use_container_width=True)
@@ -317,30 +452,18 @@ with tab2:
                 )
                 chart_type = st.session_state.chart3_type
             with col2:
-                # time_range= st.select_slider(
-                #     "Select Months",
-                #     options=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
-                #     value = "1",
-                #     key="time_frame2"
-                # )
-                params = {"brand_name":brand_name}
-                # if time_range == "1 month":
-                #     params = {"brand_name":brand_name,"month":1}
-                # elif time_range == "3 months":
-                #     params = {"brand_name":brand_name,"quarter":1}
-                # elif time_range == "6 months":
-                #     params = {"brand_name":brand_name,"quarter":2}
-                # elif time_range == "9 months":
-                #     params = {"brand_name":brand_name,"quarter":3}
-                # else: 
-                #     params = {"brand_name":brand_name}
-                # time_range = st.session_state.time_frame2
+                time_range = time_range_selector("Time",key="time2")
+            if time_range:
+                params = {"brand_name": brand_name, **time_range}
+            else:
+                params = {"brand_name": brand_name}
             search_key_placeholder = st.empty()
 
             manage_keywords(search_key_placeholder,"keywords_brand",brand_name)
             if st.session_state.get("keywords_brand"):
                 params["keywords"] = ",".join(st.session_state["keywords_brand"])
             try: 
+                params = get_selected_group_ids(params)
                 df = api.get_brand_keyword(params=params)
                 if "error" in df.columns:
                     st.error(df["error"].iloc[0])
@@ -358,16 +481,11 @@ with tab2:
         #SENTIMENT ANALYSIS
         with st.container(border=True):
             st.write("Sentiment Analysis %")
-            right_placeholder = st.empty()  
-            #selecting chart type
-            # time_range = st.select_slider(
-            #         "Select time frame",
-            #         options=["1 month", "3 months", "6 months", "9 months", "1 year"],
-            #         key="time_frame3"
-            #     )
-            # time_range = st.session_state.time_frame3
-            params = {"brand_name":brand_name}
+            right_placeholder = st.empty()
+            time_range = time_range_selector("Time",key="time3")
+            params = {"brand_name":brand_name, **time_range} if time_range else {"brand_name":brand_name}
             try:
+                params = get_selected_group_ids(params)
                 df = api.get_sentiment_analysis(params=params)
                 if "error" in df.columns:
                     st.error(df["error"].iloc[0])
@@ -379,20 +497,26 @@ with tab2:
                         right_placeholder.altair_chart(chart, use_container_width=True)
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
-            
+        
+        #CONSUMER PERCEPTION
         with st.container(border = True):
             st.write("Consumer Perception Analysis")
             bottom_placeholder = st.empty()
             #selecting chart type
-            option = st.selectbox(
-                "Select chart type",
-                ("Bar Chart","Pie Chart"),
-                key="chart5_type"
-            )
-            chart_type = st.session_state.chart5_type
+            col1, col2 = st.columns(2)
+            with col1:
+                option = st.selectbox(
+                    "Select chart type",
+                    ("Bar Chart","Pie Chart"),
+                    key="chart5_type"
+                )
+                chart_type = st.session_state.chart5_type
+            with col2:
+                time_range = time_range_selector("Time",key="time4")
 
-            params = {"brand_name":brand_name}
+            params = {"brand_name":brand_name, **time_range}if time_range else {"brand_name":brand_name}
             try: 
+                params = get_selected_group_ids(params)
                 df = api.get_consumer_perception(params=params)
                 if "error" in df.columns:
                     st.error(df["error"].iloc[0])
@@ -459,16 +583,44 @@ with tab3:
                 "time2": int(time2) if time2 else None,
             }
 
-            try: 
-                df = api.get_time_compare_frequency(params=params)
-                if "error" in df: 
-                    st.error(df["error"])
-                elif "time_period" not in df or "count" not in df:
-                    st.warning("No valid keyword data returned.")
-                else: 
-                    chart = render_chart(pd.DataFrame(df), "Bar Chart", "keyword", "count",key_prefix="chart6")
-                    if chart:
-                        keyword_placeholder.altair_chart(chart, use_container_width=True)
+            try:
+                params = get_selected_group_ids(params)
+                df_json = api.get_time_compare_frequency(params=params)
+                compare = df_json.get("compare", {})
+                periods = list(compare.keys())
+
+                # --- collect all unique keywords across both time periods ---
+                all_keywords = {
+                    item["keyword"]
+                    for data in compare.values()
+                    for item in data
+                    if item.get("keyword") is not None
+                }
+
+                compare_data = []
+                for kw in all_keywords:
+                    for period in periods:
+                        count = next(
+                            (i["count"] for i in compare.get(period, []) if i["keyword"] == kw),
+                            0
+                        )
+                        compare_data.append({
+                            "time_period": period,
+                            "keyword": kw,
+                            "count": count
+                        })
+
+                if not compare_data:
+                    st.warning("No keyword frequency data returned.")
+                    st.stop()
+
+                df_plot = pd.DataFrame(compare_data)
+                df_plot["count"] = pd.to_numeric(df_plot["count"], errors="coerce")
+
+                chart = render_chart(df_plot, "Bar Chart", "keyword", "count", key_prefix="chart6")
+                if chart:
+                    keyword_placeholder.altair_chart(chart, use_container_width=True)
+
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
 
@@ -499,14 +651,22 @@ with tab3:
                 "time2": int(time2),
             }
             try:
-                df= api.get_time_compare_sentiment(params=params)
-                if "error" in df.columns:
-                    st.error(df["error"].iloc[0])
-                elif "sentiment" not in df.columns or "value" not in df.columns:
-                    st.warning("No valid sentiment data returned.")
+                params = get_selected_group_ids(params)
+                df_json= api.get_time_compare_sentiment(params=params)
+                compare_data = []
+                for period, data in df_json.get("compare", {}).items():
+                    for item in data.get("sentiment_detail",[]):
+                        compare_data.append({
+                            "time_period": period,
+                            "sentiment": item["sentiment"],
+                            "percentage": item["percentage"],
+                        })
+                df_plot = pd.DataFrame(compare_data)
+                if df_plot.empty:
+                    st.warning("No sentiment data returned.")
                 else: 
-                    chart = render_chart(df, "Bar Chart", "sentiment", "value",key_prefix="chart7")
-                    if chart: 
+                    chart = render_chart(df_plot, "Bar Chart", "sentiment", "percentage",key_prefix="chart7")
+                    if chart:
                         sentiment_placeholder.altair_chart(chart, use_container_width=True)
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
@@ -543,13 +703,22 @@ with tab3:
                 "time2": int(time2),
             }
             try:
-                df = api.get_share_of_voice() 
-                if "error" in df.columns:
-                    st.error(df["error"].iloc[0])
-                elif "brand" not in df.columns or "percentage" not in df.columns:
-                    st.warning("No valid share of voice data returned.")
-                else:
-                    chart = render_chart(df, "Bar Chart", "brand", "percentage", key_prefix="chart9")
+                params = get_selected_group_ids(params)
+                df_json = api.get_time_compare_share_of_voice(params=params)
+                compare_data = []
+                for period, data in df_json.get("compare", {}).items():
+                    for item in data.get("share",[]):
+                        compare_data.append({
+                            "time_period": period,
+                            "brand": item["brand"],
+                            "count": item["count"]
+                        })
+                df_plot = pd.DataFrame(compare_data)
+
+                if df_plot.empty:
+                    st.warning("No share of voice data returned.")
+                else: 
+                    chart = render_chart(df_plot, "Bar Chart", "brand", "count",key_prefix="chart8")
                     if chart:
                         share_placeholder.altair_chart(chart, use_container_width=True)
             except Exception as e:
@@ -558,7 +727,7 @@ with tab3:
     else:
         st.empty()
 
-#TAB 4 - Brand Comparison
+#TAB 4 -BRAND COMPARISON
 with tab4: 
     set_active_tab("Brand Comparison")
     if st.session_state.active_tab == "Brand Comparison":
@@ -575,17 +744,14 @@ with tab4:
 
         with st.container(border=True):
             st.write("Share of Voice")
-            col1, col2 = st.columns(2)
-            with col1: 
-                option = st.selectbox(
+            option = st.selectbox(
                     "Select chart type",
                     ("Bar Chart","Pie Chart"),
                     key="chart8_type"
                 )
-                chart_type = st.session_state.chart8_type
-            with col2:
-                st.write("timeframe")
-
+            chart_type = st.session_state.chart8_type
+            params = {"category_name": category_name}
+            params = get_selected_group_ids(params)
             try:
                 df = api.get_share_of_voice() 
                 if not df.empty and "category" in df.columns:
@@ -606,18 +772,15 @@ with tab4:
         #CONSUMER PERCEPTION
         with st.container(border=True):
             st.write("Consumer Perception Analysis")
-            col1, col2 = st.columns(2)
-            with col1: 
-                option = st.selectbox(
+            option = st.selectbox(
                     "Select chart type",
                     ("Bar Chart","Pie Chart"),
                     key="chart9_type"
                 )
-                chart_type = st.session_state.chart8_type
-            with col2:
-                st.write("timeframe")
+            chart_type = st.session_state.chart8_type
             params = {"category_name": category_name, "top_k": 20}
-            try: 
+            params = get_selected_group_ids(params)
+            try:
                 df= api.get_category_consumer_perception(params=params)
                 if "error" in df.columns:
                     st.error(df["error"].iloc[0])
