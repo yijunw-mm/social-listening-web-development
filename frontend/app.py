@@ -511,9 +511,49 @@ with tab3:
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
 
+        #share of voice
         with st.container(border=True):
             st.write("Share of Voice")
-            
+            share_placeholder = st.empty()
+            category_name = st.selectbox(
+                "Select Category",
+                    ("formula milk", "diaper","hospital","weaning"),
+                    key="category_select2"
+            )
+            col1, col2,col3 = st.columns([1.2,1,1])
+            with col1:
+                granularity = st.selectbox(
+                    "Select Comparison",
+                    ("Month","Quarter","Year"),
+                    key="granularity2",
+                    index=2
+                )
+            with col2:
+                time1 = st.text_input("Time 1",value=2024,key="time1_3")
+            with col3:
+                time2 = st.text_input("Time 2",value=2025,key="time2_4")
+
+            if not (time1.isdigit() and time2.isdigit()):
+                st.warning("Please enter numeric values (e.g. 202405 for May 2025).")
+                st.stop()
+            params = {
+                "category_name": category_name,
+                "granularity": granularity.lower(),
+                "time1": int(time1),
+                "time2": int(time2),
+            }
+            try:
+                df = api.get_share_of_voice() 
+                if "error" in df.columns:
+                    st.error(df["error"].iloc[0])
+                elif "brand" not in df.columns or "percentage" not in df.columns:
+                    st.warning("No valid share of voice data returned.")
+                else:
+                    chart = render_chart(df, "Bar Chart", "brand", "percentage", key_prefix="chart9")
+                    if chart:
+                        share_placeholder.altair_chart(chart, use_container_width=True)
+            except Exception as e:
+                st.error(f"Failed to fetch data: {e}")
 
     else:
         st.empty()
