@@ -81,3 +81,11 @@ def new_keyword_prediction(group_id: Optional[str] = None,
 
 
 
+@router.get("/chat-number")
+def get_groups():
+    groups = df_stage['group_id'].unique().tolist()
+    result = [{'id':gid} for gid in groups]
+    return{
+        "total":len(groups),
+        "groups":result
+    }
