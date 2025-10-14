@@ -8,19 +8,23 @@ router = APIRouter()
 kw_model = KeyBERT(model='all-MiniLM-L6-v2')
 
 # load data
-df_chat = pd.read_csv("data/processing_output/cleaned_chat_df_dec.csv")
+df_chat = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
 df_kw = pd.read_csv("data/other_data/general_kw_list.csv")
 keyword_list = df_kw['keywords'].tolist()
-
+df_stage= pd.read_csv("data/processing_output/groups.csv",dtype={"group_id":str})
 
 @router.get("/keyword-frequency")
 def keyword_frequency(group_id: Optional[str] = None,
+                      stage: Optional[str]=None,
                       year: Optional[int] = None,
                       month: Optional[List[int]] = Query(None),
                       quarter: Optional[int] = None):
     df = df_chat
     if group_id:
         df = df[df["group_id"] == group_id]
+    if stage:
+        stage_group_ids= df_stage[df_stage['stage']==stage]["group_id"].tolist()
+        df = df[df["group_id"].isin(stage_group_ids)]
     if year:
         df = df[df["year"]== year]
     if month:

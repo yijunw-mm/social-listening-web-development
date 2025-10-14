@@ -1,11 +1,11 @@
 from fastapi import APIRouter
 from collections import defaultdict
-from typing import List
+from typing import List, Optional
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 
 router = APIRouter()
-df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_nov_new.csv")
+df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
 
 df_cat = pd.read_csv("data/other_data/newest_brand_keywords.csv")
 brand_category_map = {
@@ -79,11 +79,13 @@ for brand, cat in brand_category_map.items():
 
 brand_keyword_dict = df_cat.groupby("brand")["keyword"].apply(list).to_dict()
 @router.get("/category/consumer-perception")
-def category_consumer_perception(category_name:str, top_k:int=20):
+def category_consumer_perception(category_name:str, top_k:int=20, group_id:Optional[str]=None):
     brand_in_category = [b for b,c in brand_category_map.items() if c==category_name]
     if not brand_in_category:
         return {"error":f"category '{category_name}' not found"}
-    
+    df = df_cleaned.copy()
+    if group_id:
+        df = df[df["group_id"]==group_id]
     keywords=[]
     for brand in brand_in_category:
         keywords.extend(brand_keyword_dict.get(brand,[]))
@@ -91,7 +93,7 @@ def category_consumer_perception(category_name:str, top_k:int=20):
     def contains_category_keywords(text):
         return any(kw in text.lower() for kw in keywords)
     
-    relevant_texts = df_cleaned[df_cleaned["clean_text"].apply(lambda x: isinstance(x, str) and contains_category_keywords(x))]["clean_text"].tolist()
+    relevant_texts = df[df["clean_text"].apply(lambda x: isinstance(x, str) and contains_category_keywords(x))]["clean_text"].tolist()
 
     if not relevant_texts:
         return {"brand": category_name, 

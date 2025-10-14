@@ -8,7 +8,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
 
 router = APIRouter()
-df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_nov_new.csv")
+df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
 
 # load brand keywrod
 brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv")  

@@ -62,7 +62,7 @@ def parse_txt_lines(lines, group_name):
                 continue 
             if str(user).strip().lower() in str(message).strip().lower():
                 continue
-            records.append({"datetime": dt, "user": user.strip(), "group_id":norm_id,
+            records.append({"datetime": dt, "user": user.strip(), "group_id":str(norm_id),
                             "text": message.strip(),"group_name":group_name})
             
     return records
@@ -82,6 +82,7 @@ def process_multiple_zips(folder_path: str) -> List[Tuple[str,str]]:
             except Exception as e:
                 print(f"Error processing {filename}:{e}")
     df = pd.DataFrame(all_records)
+    df['group_id'] = df['group_id'].astype(str)
     return df
 
 # test

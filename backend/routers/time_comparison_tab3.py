@@ -6,7 +6,7 @@ import json
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 router = APIRouter()
-df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_nov_new.csv")
+df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
 
 # load brand keywrod
 brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv")  
@@ -16,14 +16,15 @@ analyzer = SentimentIntensityAnalyzer()
 
 @router.get("/brand/time-compare/frequency")
 def compare_keyword_frequency(
-    #group_id: Optional[str] = None,
     brand_name: str,
     granularity: Literal["year", "month", "quarter"],
     time1: int,
-    time2: int
+    time2: int,
+    group_id: Optional[str] = None,
 ):
     df = df_cleaned.copy()
-    #df = df[df["group_id"] == group_id]
+    if group_id:
+        df = df[df["group_id"] == group_id]
 
     if brand_name not in brand_keyword_dict:
         return {"error": f"Brand '{brand_name}' not found."}
@@ -65,9 +66,12 @@ def keyword_frequency(
     brand_name: str,
     granularity:Literal["year","month","quarter"],
     time1:int,
-    time2:int
+    time2:int,
+    group_id: Optional[str]=None,
 ):
     df = df_cleaned.copy()
+    if group_id:
+        df = df[df["group_id"] == group_id]
     if brand_name not in brand_keyword_dict:
         return {"error": f"Brand '{brand_name}' not found in keyword dictionary."}
     keywords = brand_keyword_dict[brand_name]
@@ -124,7 +128,8 @@ def category_share_of_voice_compare(
     category_name: str,
     granularity: Literal["year", "month", "quarter"],
     time1: int,
-    time2: int
+    time2: int,
+    group_id: Optional[str]=None,
 ):
     #find the category
     df_cat = pd.read_csv("data/other_data/newest_brand_keywords.csv")
@@ -137,6 +142,8 @@ def category_share_of_voice_compare(
         return {"error": f"category '{category_name}' not found"}
 
     df = df_cleaned.copy()
+    if group_id:
+        df = df[df["group_id"] == group_id]
 
 
     def filter_df(df: pd.DataFrame, time: int):

@@ -14,7 +14,7 @@ def parse_group_name(group_name: str):
     if not match:
         return None
     year = int(match.group(1))
-    month_str = match.group(2).title() #DEC->Dec
+    month_str = match.group(2).title() #DEC->Dec, only standardize format, or can try group(2)[:3].title()
     if month_str not in calendar.month_abbr:
         return None
     month = list(calendar.month_abbr).index(month_str)  # DEC->12
