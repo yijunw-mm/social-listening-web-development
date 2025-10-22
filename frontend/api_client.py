@@ -10,7 +10,6 @@ def group_chat(params: dict = None) -> dict:
     resp = requests.get(url, params=params, timeout=100)
     resp.raise_for_status()
     return resp.json()
-
 def get_keyword_frequency(params:dict = None) -> pd.DataFrame:
     url = f"{base_api}/keyword-frequency"
     resp = requests.get(url,params=params,timeout=100)

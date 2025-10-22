@@ -21,7 +21,7 @@ apply_custom_style()
 if "active_tab" not in st.session_state:
     st.session_state.active_tab = "General"
 
-tab_labels = ["📈 General", "📊 Brand", "Time Comparison", "Brand Comparison"]
+tab_labels = ["📈 General", "📊 Brand", "🕓 Time Comparison", "📋 Brand Comparison"]
 tab1, tab2, tab3, tab4 = st.tabs(tab_labels)
 
 # Simple helper to switch state when tab changes
@@ -347,7 +347,7 @@ with tab1:
             st.write("Keyword Frequency")
             left_placeholder = st.empty() 
             
-            stage = st.selectbox("Select Stage", ("None","Pregnant","Pre-Pregnancy","Infant/Preschool","Weaning","Preschool","Enrinchment","Other"), key="stage_select", index=0)
+            stage = st.selectbox("Select Stage", ("None","Pregnant(0 to 9 months)","Infant/Preschool(1 to 18 months)","Weaning(4 to 16 months)","Preschool(18 months to 5yo)","Enrinchment(3 to 6yo)","Other"), key="stage_select", index=0)
             if stage == "None":
                 params = {}
             #selecting chart type 
@@ -556,6 +556,7 @@ with tab3:
             st.session_state["keywords_brand"] = []
             st.session_state.last_brand = brand_name
             
+        #Keyword Frequency over time
         with st.container(border=True):
             st.write("Keyword Frequency")
             keyword_placeholder = st.empty()
@@ -624,7 +625,7 @@ with tab3:
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
 
-
+        #sentiment analysis over time
         with st.container(border = True):
             st.write("Sentiment Analysis %")
             sentiment_placeholder = st.empty()
