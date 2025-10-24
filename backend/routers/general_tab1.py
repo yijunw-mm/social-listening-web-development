@@ -14,14 +14,14 @@ keyword_list = df_kw['keywords'].tolist()
 df_stage= pd.read_csv("data/processing_output/groups.csv",dtype={"group_id":str})
 
 @router.get("/keyword-frequency")
-def keyword_frequency(group_id: Optional[str] = None,
+def keyword_frequency(group_id: Optional[List[str]] = Query(None),
                       stage: Optional[str]=None,
                       year: Optional[int] = None,
                       month: Optional[List[int]] = Query(None),
                       quarter: Optional[int] = None):
     df = df_chat
     if group_id:
-        df = df[df["group_id"] == group_id]
+        df = df[df["group_id"].isin(group_id)]
     if stage:
         stage_group_ids= df_stage[df_stage['stage']==stage]["group_id"].tolist()
         df = df[df["group_id"].isin(stage_group_ids)]

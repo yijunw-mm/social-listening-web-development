@@ -1,12 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from collections import defaultdict
 from typing import List, Optional
 import pandas as pd
+import re
 from sklearn.feature_extraction.text import CountVectorizer
 
 router = APIRouter()
 df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
-
+df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 df_cat = pd.read_csv("data/other_data/newest_brand_keywords.csv")
 brand_category_map = {
     str(row["brand"]).strip().lower(): str(row["category"]).strip()
@@ -25,6 +26,15 @@ def get_share_of_voice():
         text = text.lower()
         matched_brands = set()
         for brand in brand_list:
+            pattern = re.compile(rf"\b{re.escape(brand)}\b")
+            if pattern.search(text):
+                matched_brands.add(brand)
+
+        for brand in matched_brands:
+            category = brand_category_map.get(brand)  
+            if category:
+                category_counts[category][brand] += 1
+
             if brand in text:
                 matched_brands.add(brand)
 
@@ -79,13 +89,15 @@ for brand, cat in brand_category_map.items():
 
 brand_keyword_dict = df_cat.groupby("brand")["keyword"].apply(list).to_dict()
 @router.get("/category/consumer-perception")
-def category_consumer_perception(category_name:str, top_k:int=20, group_id:Optional[str]=None):
+def category_consumer_perception(category_name:str, 
+                                 top_k:int=20, 
+                                 group_id:Optional[List[str]]=Query(None)):
     brand_in_category = [b for b,c in brand_category_map.items() if c==category_name]
     if not brand_in_category:
         return {"error":f"category '{category_name}' not found"}
     df = df_cleaned.copy()
     if group_id:
-        df = df[df["group_id"]==group_id]
+        df = df[df["group_id"].isin(group_id)]
     keywords=[]
     for brand in brand_in_category:
         keywords.extend(brand_keyword_dict.get(brand,[]))

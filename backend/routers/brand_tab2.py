@@ -6,29 +6,77 @@ import json
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
+import re
 
 router = APIRouter()
 df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
-
+df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 # load brand keywrod
-brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv")  
+brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv",keep_default_na=False,na_values=[""])  
 brand_keyword_dict = brand_keyword_df.groupby("brand")["keyword"].apply(list).to_dict()
 
 # temporary store user-add keywords
 custom_keywords_dict = {brand: set() for brand in brand_keyword_dict}
 
+
+def extract_brand_context(df: pd.DataFrame, brand: str, brand_keyword_map: dict,
+                          window_size: int = 3, merge_overlap: bool = True):
+
+
+    indices = []
+    for i, text in enumerate(df["clean_text"].dropna()):
+        if any(alias in text for alias in brand_keyword_map.get(brand, [])):
+            start = max(0, i - window_size)
+            end = min(len(df), i + window_size + 1)
+            indices.append((start, end))
+
+
+    if not indices:
+        return []
+
+
+    # combine overlap window
+    if merge_overlap:
+        merged = []
+        current_start, current_end = indices[0]
+        for s, e in indices[1:]:
+            if s <= current_end:  # if there is overlap
+                current_end = max(current_end, e)
+            else:
+                merged.append((current_start, current_end))
+                current_start, current_end = s, e
+        merged.append((current_start, current_end))
+        indices = merged
+
+
+    # collect corpus
+    contexts = []
+    for s, e in indices:
+        subset = df.iloc[s:e]
+        contexts.append({
+            "start_idx": s,
+            "end_idx": e,
+            "context": subset["clean_text"].tolist()
+        })
+
+
+    return contexts
+
+
 @router.get("/brand/keyword-frequency")
 def keyword_frequency(
     brand_name: str,
-    group_id:Optional[str]=None,
+    group_id:Optional[List[str]]=Query(None),
     year: Optional[int] = None,
     month: Optional[List[int]] = Query(None),
-    quarter: Optional[int] = None
+    quarter: Optional[int] = None,
+    window_size:int=3,
+    merge_overlap:bool =True
 ):
     # Step 1 filter dataframe
     df = df_cleaned.copy()
     if group_id:
-        df = df[df["group_id"]==group_id]
+        df = df[df["group_id"].isin(group_id)]
     if year:
         df = df[df["year"]==year]
     if month:
@@ -43,12 +91,35 @@ def keyword_frequency(
     custom_keywords = custom_keywords_dict.get(brand_name, set())
     all_keywords = list(base_keywords.union(custom_keywords))
 
-    # Step 3: count keyword frequency
+    # New step 3 extract the window message
+    contexts = extract_brand_context(
+        df,
+        brand=brand_name,
+        brand_keyword_map = brand_keyword_dict,
+        window_size=window_size,
+        merge_overlap=merge_overlap
+    )
+    if not contexts:
+        return {"error":f"No mention about brand {brand_name}"}
+    
+    # step 4 combine
+    context_texts=[]
+    for c in contexts:
+        context_texts.extend(c["context"])
+
+    # Step 5: count keyword frequency
     freq_counter = Counter()
-    for text in df["clean_text"].dropna():
+    for text in context_texts:
+        words = re.findall("r\w+",text.lower())
         for kw in all_keywords:
-            if kw.lower() in text.lower():
+            if kw.lower() in words:
                 freq_counter[kw] += 1
+    if not freq_counter:
+        all_words = " ".join(context_texts).split()
+        filtered_words = [w for w in all_keywords if w.isalpha() and len(w)>2]
+        counter = Counter(filtered_words)
+        top_fallback = [{"keyword":w, "count":c} for w, c in counter.most_common(5)]
+        return top_fallback
 
     # Step 4: return output
     result = [{"keyword": kw, "count": freq} for kw, freq in freq_counter.items()]
@@ -75,7 +146,7 @@ analyzer = SentimentIntensityAnalyzer()
 @router.get("/brand/sentiment-analysis")
 def brand_sentiment_analysis_vader(
     brand_name: str,
-    group_id: Optional[str] = None,
+    group_id: Optional[List[str]] = Query(None),
     year: Optional[int] =None,
     month: Optional[List[int]] = Query(None),
     quarter: Optional[int] = None
@@ -83,7 +154,7 @@ def brand_sentiment_analysis_vader(
     # 1. get data
     df = df_cleaned.copy()
     if group_id:
-        df = df[df["group_id"] == group_id]
+        df = df[df["group_id"].isin(group_id)]
     if year:
         df = df[df["year"] == year]
     if month:
@@ -158,14 +229,14 @@ def compute_co_occurrence_matrix(texts, top_k=20):
 
 @router.get("/brand/consumer-perception")
 def consumer_perception(brand_name: str, 
-                        group_id:Optional[str]=None,
+                        group_id:Optional[List[str]]=Query(None),
                         year: Optional[int] = None,
                         month: Optional[int] = None,
                         quarter: Optional[int] = None,
                         top_k: int = 20):
     df = df_cleaned.copy()
     if group_id:
-        df = df[df["group_id"] == group_id]
+        df = df[df["group_id"].isin(group_id)]
     if year:
         df = df[df["year"] == year]
     if month:
