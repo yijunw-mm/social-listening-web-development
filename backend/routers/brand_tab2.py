@@ -110,13 +110,13 @@ def keyword_frequency(
     # Step 5: count keyword frequency
     freq_counter = Counter()
     for text in context_texts:
-        words = re.findall("r\w+",text.lower())
+        words = re.findall(r"\w+",text.lower())
         for kw in all_keywords:
             if kw.lower() in words:
                 freq_counter[kw] += 1
     if not freq_counter:
         all_words = " ".join(context_texts).split()
-        filtered_words = [w for w in all_keywords if w.isalpha() and len(w)>2]
+        filtered_words = [w for w in all_words if w.isalpha() and len(w)>2]
         counter = Counter(filtered_words)
         top_fallback = [{"keyword":w, "count":c} for w, c in counter.most_common(5)]
         return top_fallback

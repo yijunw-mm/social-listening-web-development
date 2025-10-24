@@ -10,7 +10,7 @@ router = APIRouter()
 df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
 df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 # load brand keywrod
-brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv")  
+brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv",keep_default_na=False,na_values=[""])  
 brand_keyword_dict = brand_keyword_df.groupby("brand")["keyword"].apply(list).to_dict()
 
 analyzer = SentimentIntensityAnalyzer()
@@ -103,7 +103,7 @@ def compare_keyword_frequency(
         context_texts = []
         for c in contexts:
             context_texts.extend(c["context"])
-        counter = Counter()
+        #counter = Counter()
         freq_counter = Counter()
 
         for text in context_texts:
@@ -119,7 +119,7 @@ def compare_keyword_frequency(
             return top_fallback
         #convert to list
         #return dict(counter)
-        return [{"keyword":k,"count":v} for k,v in counter.items()]
+        return [{"keyword":k,"count":v} for k,v in freq_counter.items()]
 
     return {
         "brand": brand_name,
