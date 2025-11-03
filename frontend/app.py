@@ -11,7 +11,7 @@ from style import apply_custom_style
 import numpy as np
 
 
-st.set_page_config(page_title="Data Viaulization Dashboard", layout="wide")
+st.set_page_config(page_title="Data Visualization Dashboard", layout="wide")
 
 st.markdown('<div class="main-title">📁 Data Visualization Dashboard </div>', unsafe_allow_html=True)
 
@@ -135,7 +135,7 @@ def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""
         return None
     
     df = df.sort_values(by=y_field, ascending=False).copy()
-    if chart_type =="Bar Chart" and "time_period" in df.columns and "x_field" != "time_period":
+    if chart_type == "Bar Chart" and "time_period" in df.columns and x_field != "time_period":
         df_plot = df.copy()
         df_plot["time_period"] = df_plot["time_period"].astype(str)
 
@@ -192,64 +192,57 @@ def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""
         )
         return (chart + text).properties(height=400)
     elif chart_type == "Pie Chart":
-        # --- handle missing values and compute percentages ---
         df = df.dropna(subset=[x_field, y_field]).copy()
         df["percent"] = (df[y_field] / df[y_field].sum() * 100).round(1)
         df["label"] = df[x_field] + " (" + df["percent"].astype(str) + "%)"
 
-        # --- color mapping (for sentiment or generic) ---
+        # --- color mapping ---
         if set(df[x_field].str.lower()) >= {"positive", "neutral", "negative"}:
             color_scale = alt.Scale(
                 domain=["positive", "neutral", "negative"],
-                range=[sentiment_colors["positive"], sentiment_colors["neutral"], sentiment_colors["negative"]]
+                range=[sentiment_colors["positive"], sentiment_colors["neutral"], sentiment_colors["negative"]],
             )
         else:
             color_scale = alt.Scale(range=custom_colors)
 
-        # --- compute mid-angles for each slice ---
-        df["cumsum"] = df[y_field].cumsum()
-        df["middle_angle"] = (df["cumsum"] - df[y_field] / 2) / df[y_field].sum() * 2 * np.pi
-
-        num_slices = len(df)
-        outer_r = 180  
-        if num_slices <= 3:
-            label_r = outer_r * 0.5
-        elif num_slices <= 6:
-            label_r = outer_r * 0.8
-        else:
-            label_r = outer_r * 0.9
-
-        df["x"] = df["middle_angle"].apply(lambda a: label_r *np.cos(a - np.pi / 2))
-        df["y"] = df["middle_angle"].apply(lambda a: label_r *np.sin(a - np.pi / 2))
-
-        # --- Base pie chart ---
+        # --- base pie ---
         pie = (
             alt.Chart(df)
-            .mark_arc(outerRadius=180)
+            .mark_arc(outerRadius=160, innerRadius=0)
             .encode(
                 theta=alt.Theta(field=y_field, type="quantitative"),
                 color=alt.Color(field=x_field, type="nominal", scale=color_scale, title=x_field.capitalize()),
                 tooltip=[
                     alt.Tooltip(x_field, title=x_field.capitalize()),
                     alt.Tooltip(y_field, title="Value"),
-                    alt.Tooltip("percent:Q", title="Percentage", format=".1f")
+                    alt.Tooltip("percent:Q", title="Percentage", format=".1f"),
                 ],
             )
         )
 
-        # --- Text layer with custom positions ---
-        text = (
+        # --- center-aligned inside labels ---
+        inside_labels = (
             alt.Chart(df)
-            .mark_text(size=13, color="white",stroke="white")
+            .mark_text(radius=100, size=13, color="white", fontWeight="bold", angle=0)
             .encode(
-                x= alt.X("x:Q",axis=None),
-                y= alt.Y("y:Q",axis = None),
-                text="label:N"
+                text="label:N",
+                theta=alt.Theta(field=y_field, type="quantitative", stack=True),
             )
-            .transform_filter(alt.datum.percent > 4)
+            .transform_filter("datum.percent >= 8")  # show inside if ≥8%
         )
 
-        return (pie + text).properties(height=420)
+        # --- outside labels for smaller slices ---
+        outside_labels = (
+            alt.Chart(df)
+            .mark_text(radius=185, size=13, color="white", align="center", fontWeight="bold")
+            .encode(
+                text="label:N",
+                theta=alt.Theta(field=y_field, type="quantitative", stack=True),
+            )
+            .transform_filter("datum.percent < 8")
+        )
+
+        return (pie + inside_labels + outside_labels).properties(height=420)
 
 
 
@@ -273,7 +266,7 @@ def time_range_selector(label,key):
         )
         start_idx = month_options.index(start) + 1
         end_idx = month_options.index(end) + 1
-        quarter_map = {1:1, 1:1, 2:1, 3:2, 4:2, 5:2, 6:2, 7:3, 8:3, 9:3, 10:4, 11:4, 12:4}
+        quarter_map = {1:1, 2:1, 3:2, 4:2, 5:2, 6:2, 7:3, 8:3, 9:3, 10:4, 11:4, 12:4}
         same_quarter = (quarter_map[start_idx] == quarter_map[end_idx])
     with col2:
         year = st.number_input("Year", min_value=2000, max_value=2100, value=datetime.now().year, step=1, key=f"{key}_year_input")
@@ -425,7 +418,7 @@ with tab2:
         brand_name = st.selectbox(
             "Select Brand",
             ("mamypoko", "huggies", "pampers","drypers","merries","offspring","rascal & friends","applecrumby","hey tiger",
-            "Nino Nana"),
+            "nino nana"),
             key="brand_select"
         )
         st.write(f"You selected: {brand_name}")
@@ -544,7 +537,7 @@ with tab3:
             brand_name = st.selectbox(
             "Select Brand",
             ("mamypoko", "huggies", "pampers","drypers","merries","offspring","rascal & friends","applecrumby","hey tiger",
-            "Nino Nana"),
+            "nino nana"),
             key="brand_select2"
         )
         st.write(f"You selected: {brand_name}")
@@ -591,18 +584,21 @@ with tab3:
                 periods = list(compare.keys())
 
                 # --- collect all unique keywords across both time periods ---
-                all_keywords = {
-                    item["keyword"]
-                    for data in compare.values()
-                    for item in data
-                    if item.get("keyword") is not None
-                }
+                all_keywords = set()
+                for data in compare.values():
+                    if isinstance(data, list):
+                        for item in data:
+                            if isinstance(item, dict) and "keyword" in item:
+                                all_keywords.add(item["keyword"])
 
                 compare_data = []
                 for kw in all_keywords:
                     for period in periods:
+                        items = compare.get(period, [])
+                        if not isinstance(items, list):
+                            continue  
                         count = next(
-                            (i["count"] for i in compare.get(period, []) if i["keyword"] == kw),
+                            (i["count"] for i in items if i.get("keyword") == kw),
                             0
                         )
                         compare_data.append({
@@ -672,56 +668,69 @@ with tab3:
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
 
-        #share of voice
+       #share of voice
         with st.container(border=True):
             st.write("Share of Voice")
             share_placeholder = st.empty()
             category_name = st.selectbox(
                 "Select Category",
-                    ("formula milk", "diaper","hospital","weaning"),
-                    key="category_select2"
+                ("formula milk", "diaper", "hospital", "weaning"),
+                key="category_select2"
             )
-            col1, col2,col3 = st.columns([1.2,1,1])
+
+            col1, col2, col3 = st.columns([1.2, 1, 1])
             with col1:
                 granularity = st.selectbox(
                     "Select Comparison",
-                    ("Month","Quarter","Year"),
+                    ("Month", "Quarter", "Year"),
                     key="granularity2",
                     index=2
                 )
             with col2:
-                time1 = st.text_input("Time 1",value=2024,key="time1_3")
+                time1 = st.text_input("Time 1", value="2025", key="time1_3")
             with col3:
-                time2 = st.text_input("Time 2",value=2025,key="time2_4")
+                time2 = st.text_input("Time 2", value="2024", key="time2_4")
 
             if not (time1.isdigit() and time2.isdigit()):
                 st.warning("Please enter numeric values (e.g. 202405 for May 2025).")
                 st.stop()
+
             params = {
                 "category_name": category_name,
                 "granularity": granularity.lower(),
                 "time1": int(time1),
                 "time2": int(time2),
             }
+
             try:
                 params = get_selected_group_ids(params)
                 df_json = api.get_time_compare_share_of_voice(params=params)
+
                 compare_data = []
-                for period, data in df_json.get("compare", {}).items():
-                    for item in data.get("share",[]):
-                        compare_data.append({
-                            "time_period": period,
-                            "brand": item["brand"],
-                            "count": item["count"]
-                        })
+                compare_dict = df_json.get("compare", {})
+
+                for period, content in compare_dict.items():
+                    share_items = []
+                    if isinstance(content, dict):
+                        share_items = content.get("share_of_voice", [])
+                    if share_items:
+                        for item in share_items:
+                            compare_data.append({
+                                "time_period": period,
+                                "brand": item.get("brand", "Unknown"),
+                                "percent": item.get("percent", 0)
+                            })
+
                 df_plot = pd.DataFrame(compare_data)
 
                 if df_plot.empty:
-                    st.warning("No share of voice data returned.")
-                else: 
-                    chart = render_chart(df_plot, "Bar Chart", "brand", "count",key_prefix="chart8")
+                    st.warning(f"No share of voice data returned for {category_name}. Both periods may have zero mentions.")
+                else:
+                    df_plot["brand"].fillna("Unknown", inplace=True)
+                    chart = render_chart(df_plot, "Bar Chart", "brand", "percent", key_prefix="chart8")
                     if chart:
                         share_placeholder.altair_chart(chart, use_container_width=True)
+
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
 
@@ -742,15 +751,14 @@ with tab4:
                 key="category_select"
         )
         st.write(f"You selected: {category_name}")
-
         with st.container(border=True):
             st.write("Share of Voice")
             option = st.selectbox(
                     "Select chart type",
                     ("Bar Chart","Pie Chart"),
-                    key="chart8_type"
+                    key="chart9_type"
                 )
-            chart_type = st.session_state.chart8_type
+            chart_type = st.session_state.chart9_type
             params = {"category_name": category_name}
             params = get_selected_group_ids(params)
             try:
@@ -764,7 +772,7 @@ with tab4:
                 elif "brand" not in df_filtered.columns or "percentage" not in df_filtered.columns:
                     st.warning("No valid share of voice data returned.")
                 else:
-                    chart = render_chart(df_filtered, chart_type, "brand", "percentage", key_prefix="chart8")
+                    chart = render_chart(df_filtered, chart_type, "brand", "percentage", key_prefix="chart9")
                     if chart:
                         st.altair_chart(chart, use_container_width=True)
             except Exception as e:
@@ -776,9 +784,9 @@ with tab4:
             option = st.selectbox(
                     "Select chart type",
                     ("Bar Chart","Pie Chart"),
-                    key="chart9_type"
+                    key="chart10_type"
                 )
-            chart_type = st.session_state.chart8_type
+            chart_type = st.session_state.chart9_type
             params = {"category_name": category_name, "top_k": 20}
             params = get_selected_group_ids(params)
             try:
@@ -788,7 +796,7 @@ with tab4:
                 elif "brand" not in df.columns or "count" not in df.columns:
                     st.warning("No valid topic data returned.")
                 else:
-                    chart = render_chart(df, chart_type, "brand", "count",key_prefix="chart9")
+                    chart = render_chart(df, chart_type, "brand", "count",key_prefix="chart10")
                     if chart:
                         st.altair_chart(chart, use_container_width=True)
             except Exception as e:
