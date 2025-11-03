@@ -7,20 +7,23 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
 import re
+from keybert import KeyBERT
+from sentence_transformers import SentenceTransformer, util 
+import spacy
 
 router = APIRouter()
-df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
+df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
 df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 # load brand keywrod
 brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv",keep_default_na=False,na_values=[""])  
-brand_keyword_dict = brand_keyword_df.groupby("brand")["keyword"].apply(list).to_dict()
+brand_keyword_dict = brand_keyword_df.groupby("brand")["keyword"].apply(lambda x:list(x)).to_dict()
 
 # temporary store user-add keywords
 custom_keywords_dict = {brand: set() for brand in brand_keyword_dict}
 
 
 def extract_brand_context(df: pd.DataFrame, brand: str, brand_keyword_map: dict,
-                          window_size: int = 3, merge_overlap: bool = True):
+                          window_size: int = 6, merge_overlap: bool = True):
 
 
     indices = []
@@ -70,7 +73,7 @@ def keyword_frequency(
     year: Optional[int] = None,
     month: Optional[List[int]] = Query(None),
     quarter: Optional[int] = None,
-    window_size:int=3,
+    window_size:int=6,
     merge_overlap:bool =True
 ):
     # Step 1 filter dataframe
@@ -143,6 +146,24 @@ def remove_keyword(brand_name:str, keyword:str):
     
 analyzer = SentimentIntensityAnalyzer()
 
+def explain_sentiment(text, top_n=5):
+    """return the contribution"""
+    words = re.findall(r"\b\w+\b", text.lower())
+    scored_words = []
+    for w in words:
+        if w in analyzer.lexicon:  # there is a score in VADER dictionary
+            score = analyzer.lexicon[w]
+            scored_words.append((w, score))
+
+    positives = sorted([x for x in scored_words if x[1] > 0], key=lambda x: -x[1])[:top_n]
+    negatives = sorted([x for x in scored_words if x[1] < 0], key=lambda x: x[1])[:top_n]
+
+    return {
+        "positives": positives,
+        "negatives": negatives
+    }
+
+
 @router.get("/brand/sentiment-analysis")
 def brand_sentiment_analysis_vader(
     brand_name: str,
@@ -165,16 +186,17 @@ def brand_sentiment_analysis_vader(
     # 2. get brand name
     if brand_name not in brand_keyword_dict:
         return {"error": f"Brand '{brand_name}' not found."}
-    keywords = brand_keyword_dict[brand_name]
+    #keywords = brand_keyword_dict[brand_name]
 
     # 3. get the message containing brand name
     matched_texts = [
         text for text in df["clean_text"].dropna()
-        if any(kw.lower() in text.lower() for kw in keywords)
+        if re.search(rf"\b{re.escape(brand_name)}\b",text.lower())
     ]
 
     # 4. compute sentiment analysis
     sentiment_result = {"positive": 0, "neutral": 0, "negative": 0}
+    detailed_examples= []
     for text in matched_texts:
         score = analyzer.polarity_scores(text)
         compound = score["compound"]
@@ -184,6 +206,15 @@ def brand_sentiment_analysis_vader(
             sentiment_result["negative"] += 1
         else:
             sentiment_result["neutral"] += 1
+        
+        # 4.5 explain the contribution
+        explanation = explain_sentiment(text, top_n=5)
+        detailed_examples.append({
+            "text": text,
+            "sentiment_score": score,
+            "top_positive_words": explanation["positives"],
+            "top_negative_words": explanation["negatives"]
+        })
 
     # 5. output
     total = len(matched_texts)
@@ -192,7 +223,8 @@ def brand_sentiment_analysis_vader(
             "brand": brand_name,
             "total_mentions": 0,
             "sentiment_percent": {},
-            "sentiment_count": {}
+            "sentiment_count": {},
+            "examples": []
         }
 
     sentiment_percent_list = [{
@@ -205,27 +237,62 @@ def brand_sentiment_analysis_vader(
         "brand": brand_name,
         "total_mentions": total,
         "sentiment_percent": sentiment_percent_list,
-        "sentiment_count": sentiment_count_list
+        "sentiment_count": sentiment_count_list,
+        "examples":detailed_examples[:5]
     }
 
-def compute_co_occurrence_matrix(texts, top_k=20):
-    vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3), min_df=2)
-    X = vectorizer.fit_transform(texts)
-    Xc = (X.T * X)
-    Xc.setdiag(0)
-    vocab = vectorizer.get_feature_names_out()
-    co_occurrence_df = pd.DataFrame(data=Xc.toarray(), index=vocab, columns=vocab)
-    word_scores = co_occurrence_df.sum(axis=1).sort_values(ascending=False)
-    candidates = list(word_scores.head(top_k*2).index)
-    def filter_redundant_ngrams(ngrams:List[str])->List[str]:
-        filtered=[]
-        for phrase in ngrams:
-            if not any(phrase in longer for longer in filtered if phrase!=longer):
-                filtered.append(phrase)
-        return filtered
-    filtered_words = filter_redundant_ngrams(candidates)[:top_k]
-    result = [{"word": word, "co_occurrence_score": int(word_scores[word])} for word in filtered_words]
-    return result
+nlp = spacy.load("en_core_web_sm")
+semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
+kw_model = KeyBERT(model='all-MiniLM-L6-v2')
+
+def extract_clean_brand_keywords_auto(texts, brand_name, top_k=15):
+    """
+    extract meaningful word
+    """
+    if not texts:
+        return []
+
+    # Step 1️⃣ remove the brand name itself
+    cleaned_texts = [re.sub(rf"\b{re.escape(brand_name)}\b", "", t.lower()) for t in texts]
+    joined_text = " ".join(cleaned_texts)
+
+    # Step 2️⃣ KeyBERT extrat keyword
+    keywords = [kw for kw, _ in kw_model.extract_keywords(
+        joined_text,
+        keyphrase_ngram_range=(1, 3),
+        use_mmr=True,
+        diversity=0.7,
+        top_n=top_k*5,
+        stop_words='english'
+    )]
+
+    # Step 3️⃣ POS keep noun, adj
+    def is_meaningful(phrase):
+        doc = nlp(phrase)
+        return any(t.pos_ in ["ADJ", "NOUN"] for t in doc)
+    keywords = [kw for kw in keywords if is_meaningful(kw)]
+
+    # Step 4️⃣ calculate semantic centre
+    if not keywords:
+        return []
+    kw_emb = semantic_model.encode(keywords, convert_to_tensor=True)
+    centroid = kw_emb.mean(dim=0, keepdim=True)
+
+    # Step 5️⃣ calculate similarity of each word and the centre
+    sims = util.cos_sim(kw_emb, centroid).flatten()
+    filtered_keywords = [kw for kw, sim in zip(keywords, sims) if sim > 0.3]
+
+    # Step 6️⃣ count the frequency in original text
+    counts = Counter()
+    for text in texts:
+        t = text.lower()
+        for kw in filtered_keywords:
+            if re.search(rf"\b{re.escape(kw)}\b", t):
+                counts[kw] += 1
+
+    results = [{"word": k, "count": v} for k, v in sorted(counts.items(), key=lambda x: x[1], reverse=True)]
+    return results
+
 
 @router.get("/brand/consumer-perception")
 def consumer_perception(brand_name: str, 
@@ -246,17 +313,15 @@ def consumer_perception(brand_name: str,
 
     if brand_name not in brand_keyword_dict:
         return {"error": f"Brand '{brand_name}' not found."}
-    
-    keywords = brand_keyword_dict[brand_name]
 
-    def contains_brand_keywords(text):
-        return any(kw.lower() in text.lower() for kw in keywords)
     
-    relevant_texts = df_cleaned[df_cleaned["clean_text"].apply(lambda x: isinstance(x, str) and contains_brand_keywords(x))]["clean_text"].tolist()
+    relevant_texts = (
+        df["clean_text"].dropna().astype(str)
+        .loc[lambda s:s.str.contains(rf"\b{re.escape(brand_name)}\b",case=False,na=False)].tolist())
 
     if not relevant_texts:
         return {"brand": brand_name, "associated_words": []}
 
-    associated_words = compute_co_occurrence_matrix(relevant_texts, top_k=top_k)
+    associated_words = extract_clean_brand_keywords_auto(relevant_texts,brand_name, top_k=top_k)
     return {"brand": brand_name, "associated_words": associated_words}
 
