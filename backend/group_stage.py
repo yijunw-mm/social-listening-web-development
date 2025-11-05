@@ -34,19 +34,19 @@ def get_stage(group_name: str, today: datetime = None):
     if today < due_date:
         months_before = -months_diff
         if months_before <= 9:
-            return "Pregnant"
+            return "Pregnant(0 to 9 months)"
         else:
             return "Pre-pregnancy"
-    if 1 <= months_diff <= 18:
-        return "Infant/Preschool"
-    elif 4 <= months_diff <= 16:
-        return "Weaning"
+    if 4 <= months_diff <= 16:
+        return "Weaning(4 to 16 months)"
+    elif 1 <= months_diff <= 18:
+        return "Infant(1 to 18 months)"
     elif 18 < months_diff <= 60:
-        return "Preschool"
+        return "Preschool(18 months to 5yo)"
     elif 36 < months_diff <= 72:
-        return "Enrichment"
+        return "Enrichment(3 to 6yo)"
     else:
-        return "Other"
+        return "Current Month"
 
 
 # -------- build df_groups from ingestion output --------
@@ -70,7 +70,7 @@ def build_groups_from_messages(messages_csv: str, output_csv: str, today: dateti
 
 # -------- test run --------
 if __name__ == "__main__":
-    input_path = "data/processing_output/structured_chat2.csv"
+    input_path = "data/processing_output/structure_chat/2025/structured_chat.csv"
     output_path = "data/processing_output/groups.csv"
     build_groups_from_messages(input_path, output_path)
 

@@ -7,7 +7,7 @@ import re
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 router = APIRouter()
-df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
+df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
 df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 # load brand keywrod
 brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv",keep_default_na=False,na_values=[""])  
@@ -192,6 +192,40 @@ def keyword_frequency(
         "compare": result
     }
 
+def _normalize_quotes(s: str) -> str:
+    if not isinstance(s, str):
+        return ""
+    return (
+        s.replace("’", "'")
+         .replace("‘", "'")
+         .replace("`", "'")
+         .lower()
+         .replace("'", "")
+         .strip()
+    )
+
+
+def _build_keyword_pattern(kw: str) -> re.Pattern:
+    k = _normalize_quotes(kw)
+    k = re.escape(k)
+    
+    k = k.replace(r"\-", r"(?:-|\\s)")
+    
+    k = k.replace(r"\ ", r"\s+")
+    return re.compile(rf"(?<!\w){k}(?!\w)", flags=re.IGNORECASE)
+
+
+def count_kw(context_texts, keywords):
+    patterns = {kw: _build_keyword_pattern(kw) for kw in keywords}
+    cnt = Counter()
+    for text in context_texts:
+        t = _normalize_quotes(text)
+        for kw, patt in patterns.items():
+            if patt.search(t):
+                cnt[kw] += 1
+    return cnt
+
+
 #------share of voice--------
 @router.get("/category/time-compare/share-of-voice")
 def category_share_of_voice_compare(
@@ -207,6 +241,7 @@ def category_share_of_voice_compare(
     str(row["brand"]).strip().lower(): str(row["category"]).strip()
     for _, row in df_cat.iterrows()
     }
+
     brand_in_category = [b for b, c in brand_category_map.items() if c == category_name]
     if not brand_in_category:
         return {"error": f"category '{category_name}' not found"}
@@ -231,27 +266,17 @@ def category_share_of_voice_compare(
 
     # --- count share of voice ---
     def compute_share(df_subset):
-        category_counts = defaultdict(lambda: defaultdict(int))
-        for text in df_subset["clean_text"].dropna():
-            text = text.lower()
-            matched_brands = set()
-            for brand in brand_in_category:
-                pattern = re.compile(rf"\b{re.escape(brand)}\b")  # 避免 nan 命中 nanny
-                if pattern.search(text):
-                    matched_brands.add(brand)
-            for brand in matched_brands:
-                category = brand_category_map[brand]
-                category_counts[category][brand] += 1
+        if df_subset.empty:
+            return {"total_mentions": 0, "share_of_voice": []}
+        counts = count_kw(df["clean_text"].dropna(), brand_in_category)
 
-        result = {}
-        for category, brand_counts in category_counts.items():
-            total = sum(brand_counts.values())
-            share_list = [
-                {"brand": b, "count": c, "percent": round(c / total * 100, 1) if total > 0 else 0}
-                for b, c in brand_counts.items()
-            ]
-            result[category] = {"total_mentions": total, "share_of_voice": share_list}
-        return result.get(category_name, {"total_mentions": 0, "share_of_voice": []})
+        total = sum(counts.values())
+        share_list = [
+            {"brand": b, "count": c, "percent": round(c / total * 100, 1) if total > 0 else 0}
+            for b, c in counts.items()
+        ]
+        return {"total_mentions": total, "share_of_voice": share_list}
+
 
 
     #analyze two time periods

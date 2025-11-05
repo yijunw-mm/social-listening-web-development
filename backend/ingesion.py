@@ -87,13 +87,13 @@ def process_multiple_zips(folder_path: str) -> List[Tuple[str,str]]:
 
 # test
 if __name__ == "__main__":
-    folder = "data/chat_zip"
+    folder = "data/chat_zip/2025"
     df_chats = process_multiple_zips(folder)
     print(f"✅ Load {len(df_chats)} chats.")
     #print("📄 Chat text preview:\n", all_chats[0][0],all_chats[0][1][:300])  
 
-df_chats = process_multiple_zips("data/chat_zip")
+df_chats = process_multiple_zips("data/chat_zip/2025")
 
-output_path = "data/processing_output/structured_chat2.csv"
+output_path = "data/processing_output/structure_chat/2025/structured_chat20258.csv"
 df_chats.to_csv(output_path,index=False)
 print(f"save to {output_path}")

@@ -245,6 +245,28 @@ nlp = spacy.load("en_core_web_sm")
 semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
 kw_model = KeyBERT(model='all-MiniLM-L6-v2')
 
+def _overlap_fraction(a, b):
+    """计算两个短语之间的token重叠比例"""
+    set_a, set_b = set(a.split()), set(b.split())
+    if not set_a or not set_b:
+        return 0
+    return len(set_a & set_b) / min(len(set_a), len(set_b))
+
+
+
+
+def remove_overlapping_phrases(keywords, overlap_ratio=0.6):
+    """
+    去除短语之间过度重叠的部分（如 "sensitive skin" vs "kids sensitive skin"）。
+    overlap_ratio: 超过多少比例认为是重叠，默认 0.6。
+    """
+    cleaned = []
+    for kw in sorted(keywords, key=len, reverse=True):  # 从长到短检查
+        if not any(_overlap_fraction(kw, c) > overlap_ratio for c in cleaned):
+            cleaned.append(kw)
+    return cleaned[::-1]  # 保持原顺序输出
+
+
 def extract_clean_brand_keywords_auto(texts, brand_name, top_k=15):
     """
     extract meaningful word
@@ -281,6 +303,8 @@ def extract_clean_brand_keywords_auto(texts, brand_name, top_k=15):
     # Step 5️⃣ calculate similarity of each word and the centre
     sims = util.cos_sim(kw_emb, centroid).flatten()
     filtered_keywords = [kw for kw, sim in zip(keywords, sims) if sim > 0.3]
+    #new_add
+    filtered_keywords = remove_overlapping_phrases(filtered_keywords,overlap_ratio=0.5)
 
     # Step 6️⃣ count the frequency in original text
     counts = Counter()

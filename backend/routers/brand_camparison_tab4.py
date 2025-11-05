@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Query
-from collections import defaultdict
+from collections import defaultdict,Counter
 from typing import List, Optional
 import pandas as pd
 import re
 from sklearn.feature_extraction.text import CountVectorizer
 
 router = APIRouter()
-df_cleaned = pd.read_csv("data/processing_output/cleaned_chat_dataframe2.csv",dtype={"group_id":str})
+df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
 df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 df_cat = pd.read_csv("data/other_data/newest_brand_keywords.csv")
 brand_category_map = {
@@ -16,51 +16,77 @@ brand_category_map = {
 brand_list = list(brand_category_map.keys())
 
 
+def _normalize_quotes(s: str) -> str:
+    if not isinstance(s, str):
+        return ""
+    return (
+        s.replace("’", "'")
+         .replace("‘", "'")
+         .replace("`", "'")
+         .lower()
+         .replace("'", "")
+         .strip()
+    )
+
+
+def _build_keyword_pattern(kw: str) -> re.Pattern:
+    k = _normalize_quotes(kw)
+    k = re.escape(k)
+    
+    k = k.replace(r"\-", r"(?:-|\\s)")
+    
+    k = k.replace(r"\ ", r"\s+")
+    return re.compile(rf"(?<!\w){k}(?!\w)", flags=re.IGNORECASE)
+
+
+def count_kw(context_texts, keywords):
+    patterns = {kw: _build_keyword_pattern(kw) for kw in keywords}
+    cnt = Counter()
+    for text in context_texts:
+        t = _normalize_quotes(text)
+        for kw, patt in patterns.items():
+            if patt.search(t):
+                cnt[kw] += 1
+    return cnt
+
+
+# ---------------- API ----------------
 @router.get("/category/share-of-voice")
-def get_share_of_voice():
+def get_share_of_voice(group_id:Optional[List[str]]=Query(None)):
     df = df_cleaned.copy()
+    if group_id:
+        df = df[df["group_id"].isin(group_id)]
 
-    category_counts = defaultdict(lambda:defaultdict(int))
+    # 1. count brand frequency
+    counts = count_kw(df["clean_text"].dropna(), brand_list)
 
-    for text in df["clean_text"].dropna():
-        text = text.lower()
-        matched_brands = set()
-        for brand in brand_list:
-            pattern = re.compile(rf"\b{re.escape(brand)}\b")
-            if pattern.search(text):
-                matched_brands.add(brand)
 
-        for brand in matched_brands:
-            category = brand_category_map.get(brand)  
-            if category:
-                category_counts[category][brand] += 1
+    # 2.map to category
+    category_counts = defaultdict(dict)
+    for brand, count in counts.items():
+        category = brand_category_map.get(brand)
+        if category:
+            category_counts[category][brand] = count
 
-            if brand in text:
-                matched_brands.add(brand)
 
-        for brand in matched_brands:
-            category = brand_category_map[brand]
-            category_counts[category][brand] += 1
-
-    # result
+    
     result = {}
     for category, brand_counts in category_counts.items():
-        total =sum(brand_counts.values())
-        brand_percentage_list=[{
-            "brand":brand,"percentage": round(count/total*100,1)}
-            for brand, count in brand_counts.items()
-        ]
-        count_list =[
-            {"brand":brand,"count":count} for brand, count in brand_counts.items()
-        ]
-
-        result[category]={
+        total = sum(brand_counts.values())
+        result[category] = {
             "total_mentions": total,
-            "share_of_voice": brand_percentage_list,
-            "original_count": count_list
+            "share_of_voice": [
+                {"brand": b, "percentage": round(c / total * 100, 1)}
+                for b, c in brand_counts.items()
+            ],
+            "original_count": [
+                {"brand": b, "count": c} for b, c in brand_counts.items()
+            ]
         }
 
+
     return result
+
 
 def compute_co_occurrence_matrix(texts, top_k=20):
     vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3), min_df=2)
