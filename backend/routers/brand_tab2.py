@@ -78,6 +78,7 @@ def keyword_frequency(
 ):
     # Step 1 filter dataframe
     df = df_cleaned.copy()
+    df['clean_text'] = df["clean_text"].fillna("").astype(str)
     if group_id:
         df = df[df["group_id"].isin(group_id)]
     if year:
@@ -241,6 +242,8 @@ def brand_sentiment_analysis_vader(
         "examples":detailed_examples[:5]
     }
 
+#------consumer perception------
+
 nlp = spacy.load("en_core_web_sm")
 semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
 kw_model = KeyBERT(model='all-MiniLM-L6-v2')
@@ -257,7 +260,7 @@ def _overlap_fraction(a, b):
 
 def remove_overlapping_phrases(keywords, overlap_ratio=0.6):
     """
-    remove the overlap part（如 "sensitive skin" vs "kids sensitive skin"）。
+    remove the overlap part（like "sensitive skin" vs "kids sensitive skin"）。
     overlap_ratio: 0.6。
     """
     cleaned = []

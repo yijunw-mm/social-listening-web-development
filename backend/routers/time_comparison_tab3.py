@@ -347,7 +347,7 @@ def category_share_of_voice_compare(
     def compute_share(df_subset):
         if df_subset.empty:
             return {"total_mentions": 0, "share_of_voice": []}
-        counts = count_kw(df["clean_text"].dropna(), brand_in_category)
+        counts = count_kw(df_subset["clean_text"].dropna(), brand_in_category)
 
         total = sum(counts.values())
         share_list = [
