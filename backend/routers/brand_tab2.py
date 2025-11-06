@@ -246,7 +246,7 @@ semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
 kw_model = KeyBERT(model='all-MiniLM-L6-v2')
 
 def _overlap_fraction(a, b):
-    """计算两个短语之间的token重叠比例"""
+    """calculate the overlap percentage between two phrases token"""
     set_a, set_b = set(a.split()), set(b.split())
     if not set_a or not set_b:
         return 0
@@ -257,14 +257,14 @@ def _overlap_fraction(a, b):
 
 def remove_overlapping_phrases(keywords, overlap_ratio=0.6):
     """
-    去除短语之间过度重叠的部分（如 "sensitive skin" vs "kids sensitive skin"）。
-    overlap_ratio: 超过多少比例认为是重叠，默认 0.6。
+    remove the overlap part（如 "sensitive skin" vs "kids sensitive skin"）。
+    overlap_ratio: 0.6。
     """
     cleaned = []
-    for kw in sorted(keywords, key=len, reverse=True):  # 从长到短检查
+    for kw in sorted(keywords, key=len, reverse=True):  # from long to short
         if not any(_overlap_fraction(kw, c) > overlap_ratio for c in cleaned):
             cleaned.append(kw)
-    return cleaned[::-1]  # 保持原顺序输出
+    return cleaned[::-1]  # keep the original order
 
 
 def extract_clean_brand_keywords_auto(texts, brand_name, top_k=15):

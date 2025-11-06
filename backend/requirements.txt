@@ -1,4 +1,7 @@
 pandas
 matplotlib
 requests
-
+numpy
+spacy
+sentence-transformers
+keybert

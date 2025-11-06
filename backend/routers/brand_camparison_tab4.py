@@ -4,6 +4,9 @@ from typing import List, Optional
 import pandas as pd
 import re
 from sklearn.feature_extraction.text import CountVectorizer
+from keybert import KeyBERT
+from sentence_transformers import SentenceTransformer, util 
+import spacy
 
 router = APIRouter()
 df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
@@ -50,7 +53,7 @@ def count_kw(context_texts, keywords):
     return cnt
 
 
-# ---------------- API ----------------
+# ---------------- share of voice API ----------------
 @router.get("/category/share-of-voice")
 def get_share_of_voice(group_id:Optional[List[str]]=Query(None)):
     df = df_cleaned.copy()
@@ -87,25 +90,80 @@ def get_share_of_voice(group_id:Optional[List[str]]=Query(None)):
 
     return result
 
+#-------consumer perception----------
 
-def compute_co_occurrence_matrix(texts, top_k=20):
-    vectorizer = CountVectorizer(stop_words='english', ngram_range=(1, 3), min_df=2)
-    X = vectorizer.fit_transform(texts)
-    Xc = (X.T * X)
-    Xc.setdiag(0)
-    vocab = vectorizer.get_feature_names_out()
-    co_occurrence_df = pd.DataFrame(data=Xc.toarray(), index=vocab, columns=vocab)
-    word_scores = co_occurrence_df.sum(axis=1).sort_values(ascending=False)
-    candidates = list(word_scores.head(top_k*2).index)
-    def filter_redundant_ngrams(ngrams:List[str])->List[str]:
-        filtered=[]
-        for phrase in ngrams:
-            if not any(phrase in longer for longer in filtered if phrase!=longer):
-                filtered.append(phrase)
-        return filtered
-    filtered_words = filter_redundant_ngrams(candidates)[:top_k]
-    result = [{"word": word, "co_occurrence_score": int(word_scores[word])} for word in filtered_words]
-    return result
+nlp = spacy.load("en_core_web_sm")
+semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
+kw_model = KeyBERT(model='all-MiniLM-L6-v2')
+
+def _overlap_fraction(a, b):
+    """calculate the overlap percentage between two phrases token"""
+    set_a, set_b = set(a.split()), set(b.split())
+    if not set_a or not set_b:
+        return 0
+    return len(set_a & set_b) / min(len(set_a), len(set_b))
+
+def remove_overlapping_phrases(keywords, overlap_ratio=0.6):
+    """
+    remove the overlap part（like "sensitive skin" vs "kids sensitive skin"）。
+    overlap_ratio: 0.6。
+    """
+    cleaned = []
+    for kw in sorted(keywords, key=len, reverse=True):  # from long to short
+        if not any(_overlap_fraction(kw, c) > overlap_ratio for c in cleaned):
+            cleaned.append(kw)
+    return cleaned[::-1]  # keep the original order
+
+def extract_clean_brand_keywords_auto(texts, brand_name, top_k=15):
+    """
+    extract meaningful word
+    """
+    if not texts:
+        return []
+
+    # Step 1️⃣ remove the brand name itself
+    cleaned_texts = [re.sub(rf"\b{re.escape(brand_name)}\b", "", t.lower()) for t in texts]
+    joined_text = " ".join(cleaned_texts)
+
+    # Step 2️⃣ KeyBERT extrat keyword
+    keywords = [kw for kw, _ in kw_model.extract_keywords(
+        joined_text,
+        keyphrase_ngram_range=(1, 3),
+        use_mmr=True,
+        diversity=0.7,
+        top_n=top_k*5,
+        stop_words='english'
+    )]
+
+    # Step 3️⃣ POS keep noun, adj
+    def is_meaningful(phrase):
+        doc = nlp(phrase)
+        return any(t.pos_ in ["ADJ", "NOUN"] for t in doc)
+    keywords = [kw for kw in keywords if is_meaningful(kw)]
+
+    # Step 4️⃣ calculate semantic centre
+    if not keywords:
+        return []
+    kw_emb = semantic_model.encode(keywords, convert_to_tensor=True)
+    centroid = kw_emb.mean(dim=0, keepdim=True)
+
+    # Step 5️⃣ calculate similarity of each word and the centre
+    sims = util.cos_sim(kw_emb, centroid).flatten()
+    filtered_keywords = [kw for kw, sim in zip(keywords, sims) if sim > 0.3]
+    #new_add
+    filtered_keywords = remove_overlapping_phrases(filtered_keywords,overlap_ratio=0.5)
+
+    # Step 6️⃣ count the frequency in original text
+    counts = Counter()
+    for text in texts:
+        t = text.lower()
+        for kw in filtered_keywords:
+            if re.search(rf"\b{re.escape(kw)}\b", t):
+                counts[kw] += 1
+
+    results = [{"word": k, "count": v} for k, v in sorted(counts.items(), key=lambda x: x[1], reverse=True)]
+    return results
+
 
 category_brand_map=defaultdict(list)
 for brand, cat in brand_category_map.items():
@@ -121,30 +179,36 @@ def category_consumer_perception(category_name:str,
     brand_in_category = [b for b,c in brand_category_map.items() if c==category_name]
     if not brand_in_category:
         return {"error":f"category '{category_name}' not found"}
+    
     df = df_cleaned.copy()
     if group_id:
         df = df[df["group_id"].isin(group_id)]
-    keywords=[]
-    for brand in brand_in_category:
-        keywords.extend(brand_keyword_dict.get(brand,[]))
-        keywords=list(set([kw.lower() for kw in keywords]))
-    def contains_category_keywords(text):
-        return any(kw in text.lower() for kw in keywords)
-    
-    relevant_texts = df[df["clean_text"].apply(lambda x: isinstance(x, str) and contains_category_keywords(x))]["clean_text"].tolist()
+    # Step 3️⃣ 获取包含品牌名的文本
+    pattern = "|".join([rf"\b{re.escape(b)}\b" for b in brand_in_category])
+    relevant_texts = (
+        df["clean_text"]
+        .dropna()
+        .astype(str)
+        .loc[lambda s: s.str.contains(pattern, case=False, na=False)]
+        .tolist()
+    )
 
     if not relevant_texts:
-        return {"brand": category_name, 
-                "associated_words": [],
-                "share-of-voice":{}
-                }
+        return {
+            "category": category_name,
+            "associated_words": [],
+            "share_of_voice": []
+        }
 
-    associated_words = compute_co_occurrence_matrix(relevant_texts, top_k=top_k)
-    share_counts=[]
-    for brand in brand_in_category:
-        brand_keywords = [kw.lower() for kw in brand_keyword_dict.get(brand,[])]
-        brand_texts =[t for t in relevant_texts if any(kw in t.lower() for kw in brand_keywords)]
-        share_counts.append({"brand":brand,"count":len(brand_texts)})
-    return {"category": category_name, 
-            "associated_words": associated_words,
-            "share-of-voice":share_counts}
+    # Step 4️⃣ 提取品类级别的关键词
+    associated_words = extract_clean_brand_keywords_auto(
+        relevant_texts,
+        brand_name=category_name,  # 品类名占位
+        top_k=top_k
+    )
+
+    # Step 6️⃣ 返回统一结果
+    return {
+        "category": category_name,
+        "associated_words": associated_words
+    }
