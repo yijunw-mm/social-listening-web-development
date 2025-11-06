@@ -69,7 +69,6 @@ def get_time_compare_share_of_voice(params: dict = None) -> pd.DataFrame:
     resp = requests.get(url, params=params, timeout=100)
     resp.raise_for_status()
     return resp.json()
-
 def get_share_of_voice() -> pd.DataFrame:
     """Fetch share of voice across all categories, flattened into DataFrame."""
     url = f"{base_api}/category/share-of-voice"
