@@ -69,29 +69,36 @@ def get_time_compare_share_of_voice(params: dict = None) -> pd.DataFrame:
     resp = requests.get(url, params=params, timeout=100)
     resp.raise_for_status()
     return resp.json()
-def get_share_of_voice() -> pd.DataFrame:
-    """Fetch share of voice across all categories, flattened into DataFrame."""
+def get_share_of_voice(params: dict = None) -> pd.DataFrame:
     url = f"{base_api}/category/share-of-voice"
-    resp = requests.get(url, timeout=100)
+    resp = requests.get(url, params=params, timeout=100)
     resp.raise_for_status()
     data = resp.json()
 
+    if "compare" not in data:
+        return pd.DataFrame(columns=["brand", "percent", "time_period"])
+
     rows = []
-    for category, info in data.items():
-        for entry in info["share_of_voice"]:
+    compare = data["compare"]
+
+    for period, info in compare.items():
+        share_items = info.get("share_of_voice", [])
+        for entry in share_items:
             rows.append({
-                "category": category,
-                "brand": entry["brand"],
-                "percentage": entry["percentage"]
+                "time_period": period,
+                "brand": entry.get("brand", "Unknown"),
+                "percent": entry.get("percent", 0)
             })
+
     return pd.DataFrame(rows)
 def get_category_consumer_perception(params: dict = None) -> pd.DataFrame:
-    """Fetch consumer perception data for a specific category."""
     url = f"{base_api}/category/consumer-perception"
     resp = requests.get(url, params=params, timeout=100)
     resp.raise_for_status()
     data = resp.json()
 
-    if isinstance(data, dict) and "share-of-voice" in data:
-        return pd.DataFrame(data["share-of-voice"])
-    return pd.DataFrame(columns=["brand", "count"])
+    if isinstance(data, dict) and "associated_words" in data:
+        return pd.DataFrame(data["associated_words"])
+
+    return pd.DataFrame(columns=["word", "count"])
+

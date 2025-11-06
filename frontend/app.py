@@ -23,7 +23,7 @@ apply_custom_style()
 if "active_tab" not in st.session_state:
     st.session_state.active_tab = "General"
 
-tab_labels = ["📈 General", "📊 Brand", "🕓 Time Comparison", "📋 Brand Comparison"]
+tab_labels = ["📊 Brand", "🕓 Time Comparison", "📋 Brand Comparison","📈 General"]
 tab1, tab2, tab3, tab4 = st.tabs(tab_labels)
 
 # Simple helper to switch state when tab changes
@@ -126,7 +126,7 @@ def get_selected_group_ids(params: dict = None) -> dict:
     params = params.copy() if params else {}
     selected_group = st.session_state.get("selected_groups", [])
     if selected_group:
-        params["group_id"] = ",".join(map(str, selected_group))
+        params["group_id"] = selected_group
     return params
 
 #render chart
@@ -140,6 +140,7 @@ def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""
     if chart_type == "Bar Chart" and "time_period" in df.columns and x_field != "time_period":
         df_plot = df.copy()
         df_plot["time_period"] = df_plot["time_period"].astype(str)
+
 
         x_label = x_field.capitalize() if x_field != "sentiment" else "Sentiment"
         y_label = "Mentions" if y_field == "count" else y_field.capitalize()
@@ -333,91 +334,9 @@ def build_stage_params(stage: str, time_range: dict) -> dict:
     return params
 
 
-#THIS IS TAB 1 - General Analysis
+
+#TAB1 - Brand Analysis
 with tab1:
-    set_active_tab("General")
-    if st.session_state.active_tab == "General":
-        st.markdown(
-        "<h4 style='text-align: center;'>Whole Chat Analysis</h4>", 
-        unsafe_allow_html=True)
-
-        #KEYWORD FREQUENCY
-        with st.container(border=True):
-            st.write("Keyword Frequency")
-            left_placeholder = st.empty() 
-            
-            stage = st.selectbox("Select Stage", ("None", "Pregnant (0 to 9 months)", "Weaning (4 to 16 months)", "Infant (1 to 18 months)", "Preschool (18 months to 5yo)", "Enrichment (3 to 6yo)", "Current Month"), key="stage_select", index=0)
-            if stage == "None":
-                params = {}
-            #selecting chart type 
-            col1, col2 = st.columns(2)
-            with col1:
-
-                option = st.selectbox(
-                    "Select chart type",
-                    ("Bar Chart", "Pie Chart"),
-                    key="chart1_type",
-                    index = 0
-                )
-                chart_type = st.session_state.chart1_type
-            with col2:
-                   time_range = time_range_selector("Time",key="time1")
-            if time_range:
-                params = build_stage_params(stage, time_range)
-            else: 
-                params = build_stage_params(stage)
-            try:
-                params = get_selected_group_ids(params)
-                df = api.get_keyword_frequency(params=params)
-                chart = render_chart(df, option, "keyword", "count",key_prefix="chart1")
-                if chart: 
-                    left_placeholder.altair_chart(chart, use_container_width=True)
-            except Exception as e:
-                st.error(f"Failed to fetch data: {e}")
-
-        #NEW KEYWORDS PREDICTION
-        st.markdown("---")
-        with st.container(border=True):
-            st.write("New Keywords Prediction")
-            right_placeholder = st.empty()
-            col1, col2 = st.columns(2)
-            with col1:
-                option2 = st.selectbox(
-                        "Select chart type",
-                        ("Bar Chart", "Pie Chart"),
-                        key="chart2_type",
-                        index = 0
-                    )
-                chart_type2 = st.session_state.chart2_type
-            with col2:
-                top_n = st.slider(
-                    "Select number of top keywords",
-                    min_value=5,
-                    max_value=20,
-                    value=10,
-                    step = 5,
-                    key="top_n",
-                )  
-                selected_topn = st.session_state.top_n
-            params2 = {"top_k": top_n}
-            params2 = get_selected_group_ids(params2)
-            with st.spinner("Fetching new keyword predictions..."):
-                try:
-                    df2 = api.new_keywords(params=params2)
-                    chart = render_chart(df2,option2, "keyword", "score",key_prefix="chart2")
-                    if chart: 
-                        right_placeholder.altair_chart(chart, use_container_width=True)
-
-                except Exception as e:
-                    st.error(f"Failed to fetch data: {e}")
-    else:
-        st.empty()
-
-
-
-
-#TAB2 - Brand Analysis
-with tab2:
     set_active_tab("Brand")
     if st.session_state.active_tab == "Brand":
         st.markdown(
@@ -434,12 +353,12 @@ with tab2:
             key="brand_select")
         st.write(f"You selected: {brand_name}")
 
-        if "last_brand" not in st.session_state:
-            st.session_state.last_brand = brand_name
+        if "last_brand_tab1" not in st.session_state:
+            st.session_state.last_brand_tab1 = brand_name
 
-        if brand_name != st.session_state.last_brand:
-            st.session_state["keywords_brand"] = []
-            st.session_state.last_brand = brand_name
+        if brand_name != st.session_state.last_brand_tab1:
+            st.session_state["keywords_brand_tab1"] = []
+            st.session_state.last_brand_tab1 = brand_name
 
         #KEYWORD FREQUENCY
         with st.container(border=True):
@@ -493,7 +412,6 @@ with tab2:
                 params = get_selected_group_ids(params)
                 df = api.get_sentiment_analysis(params=params)
                 data = api.get_sentiment_analysis(params=params)
-                st.json(data)
                 if "error" in df.columns:
                     st.error(df["error"].iloc[0])
                 elif "sentiment" not in df.columns or "value" not in df.columns:
@@ -636,8 +554,8 @@ with tab2:
         st.empty()
         
 
-#TAB 3 - Time Comparison
-with tab3:
+#TAB 2 - Time Comparison
+with tab2:
     set_active_tab("Time Comparison")
     if st.session_state.active_tab == "Time Comparison":
         st.markdown(
@@ -652,12 +570,12 @@ with tab3:
         )
         st.write(f"You selected: {brand_name}")
 
-        if "last_brand" not in st.session_state:
-            st.session_state.last_brand = brand_name
+        if "last_brand_tab2" not in st.session_state:
+            st.session_state.last_brand_tab2 = brand_name
 
-        if brand_name != st.session_state.last_brand:
+        if brand_name != st.session_state.last_brand_tab2:
             st.session_state["keywords_brand"] = []
-            st.session_state.last_brand = brand_name
+            st.session_state.last_brand_tab2 = brand_name
             
         #Keyword Frequency over time
         with st.container(border=True):
@@ -676,7 +594,7 @@ with tab3:
             with col3:
                 time2 = st.text_input("Time 2",value=2025,key="time2")
 
-            if not (time1.isdigit() and time2.isdigit()):
+            if not (time1 and time1.isdigit() and time2 and time2.isdigit()):
                 st.warning("Please enter numeric values (e.g. 202405 for May 2025).")
                 st.stop()
 
@@ -732,51 +650,77 @@ with tab3:
                 st.error(f"Failed to fetch data: {e}")
 
         #sentiment analysis over time
-        with st.container(border = True):
+        with st.container(border=True):
             st.write("Sentiment Analysis %")
             sentiment_placeholder = st.empty()
-            col1, col2,col3 = st.columns([1.2,1,1])
+
+            col1, col2, col3 = st.columns([1.2,1,1])
             with col1:
                 granularity = st.selectbox(
                     "Select Comparison",
                     ("Month","Quarter","Year"),
-                    key="granularity1",
+                    key="granularity_sentiment",
                     index=2
                 )
             with col2:
-                time1 = st.text_input("Time 1",value=2024,key="time1_1")
+                time1 = st.text_input("Time 1", value="2024", key="sentiment_time1")
             with col3:
-                time2 = st.text_input("Time 2",value=2025,key="time2_2")
+                time2 = st.text_input("Time 2", value="2025", key="sentiment_time2")
 
-            if not (time1.isdigit() and time2.isdigit()):
-                st.warning("Please enter numeric values (e.g. 202405 for May 2025).")
-                st.stop()
+            def validate(time_str, gran):
+                if gran == "year":
+                    return int(time_str)
+                elif gran == "month":
+                    if len(time_str) != 6:
+                        st.warning("Enter YYYYMM for Month.")
+                        st.stop()
+                    return int(time_str)
+                elif gran == "quarter":
+                    if len(time_str) != 5:
+                        st.warning("Enter YYYYQ (e.g., 20251) for Quarter.")
+                        st.stop()
+                    return int(time_str)
+
+            t1 = validate(time1, granularity.lower())
+            t2 = validate(time2, granularity.lower())
+
             params = {
                 "brand_name": brand_name,
                 "granularity": granularity.lower(),
-                "time1": int(time1),
-                "time2": int(time2),
+                "time1": t1,
+                "time2": t2
             }
+            params = get_selected_group_ids(params)
+
             try:
-                params = get_selected_group_ids(params)
-                df_json= api.get_time_compare_sentiment(params=params)
+                df_json = api.get_time_compare_sentiment(params=params)
+                compare = df_json.get("compare", {})
+
+                df_json = api.get_time_compare_sentiment(params=params)
+
+                sentiment_list = df_json.get("sentiment_percent", [])
                 compare_data = []
-                for period, data in df_json.get("compare", {}).items():
-                    for item in data.get("sentiment_detail",[]):
-                        compare_data.append({
-                            "time_period": period,
-                            "sentiment": item["sentiment"],
-                            "percentage": item["percentage"],
-                        })
+
+                for item in sentiment_list:
+                    compare_data.append({
+                        "time_period": f"{time1} vs {time2}",
+                        "sentiment": item["sentiment"],
+                        "percentage": item["value"],
+                    })
+
+
                 df_plot = pd.DataFrame(compare_data)
+
                 if df_plot.empty:
-                    st.warning("No sentiment data returned.")
-                else: 
-                    chart = render_chart(df_plot, "Bar Chart", "sentiment", "percentage",key_prefix="chart7")
+                    st.warning("No sentiment data for selected periods.")
+                else:
+                    chart = render_chart(df_plot, "Bar Chart", "sentiment", "percentage", key_prefix="chart_sent")
                     if chart:
                         sentiment_placeholder.altair_chart(chart, use_container_width=True)
+
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
+
 
        #share of voice
         with st.container(border=True):
@@ -847,8 +791,8 @@ with tab3:
     else:
         st.empty()
 
-#TAB 4 -BRAND COMPARISON
-with tab4: 
+#TAB 3 -BRAND COMPARISON
+with tab3: 
     set_active_tab("Brand Comparison")
     if st.session_state.active_tab == "Brand Comparison":
         st.markdown(
@@ -872,11 +816,8 @@ with tab4:
             params = {"category_name": category_name}
             params = get_selected_group_ids(params)
             try:
-                df = api.get_share_of_voice() 
-                if not df.empty and "category" in df.columns:
-                    df_filtered = df[df["category"].str.lower() == category_name.lower()]
-                else:
-                    df_filtered = df
+                df = api.get_share_of_voice(params=params)
+                df_filtered = df
                 if "error" in df_filtered.columns:
                     st.error(df_filtered["error"].iloc[0])
                 elif "brand" not in df_filtered.columns or "percentage" not in df_filtered.columns:
@@ -896,17 +837,17 @@ with tab4:
                     ("Bar Chart","Pie Chart"),
                     key="chart10_type"
                 )
-            chart_type = st.session_state.chart9_type
+            chart_type = st.session_state.chart10_type
             params = {"category_name": category_name, "top_k": 20}
             params = get_selected_group_ids(params)
             try:
                 df= api.get_category_consumer_perception(params=params)
                 if "error" in df.columns:
                     st.error(df["error"].iloc[0])
-                elif "brand" not in df.columns or "count" not in df.columns:
+                elif "word" not in df.columns or "count" not in df.columns:
                     st.warning("No valid topic data returned.")
                 else:
-                    chart = render_chart(df, chart_type, "brand", "count",key_prefix="chart10")
+                    chart = render_chart(df, chart_type, "word", "count",key_prefix="chart10")
                     if chart:
                         st.altair_chart(chart, use_container_width=True)
             except Exception as e:
@@ -914,6 +855,85 @@ with tab4:
         
     else:
         st.empty()
-\
 
 
+
+#THIS IS TAB 4 - General Analysis
+with tab4:
+    set_active_tab("General")
+    if st.session_state.active_tab == "General":
+        st.markdown(
+        "<h4 style='text-align: center;'>Whole Chat Analysis</h4>", 
+        unsafe_allow_html=True)
+
+        #KEYWORD FREQUENCY
+        with st.container(border=True):
+            st.write("Keyword Frequency")
+            left_placeholder = st.empty() 
+            
+            stage = st.selectbox("Select Stage", ("None", "Pregnant (0 to 9 months)", "Weaning (4 to 16 months)", "Infant (1 to 18 months)", "Preschool (18 months to 5yo)", "Enrichment (3 to 6yo)", "Current Month"), key="stage_select", index=0)
+            if stage == "None":
+                params = {}
+            #selecting chart type 
+            col1, col2 = st.columns(2)
+            with col1:
+
+                option = st.selectbox(
+                    "Select chart type",
+                    ("Bar Chart", "Pie Chart"),
+                    key="chart1_type",
+                    index = 0
+                )
+                chart_type = st.session_state.chart1_type
+            with col2:
+                   time_range = time_range_selector("Time",key="time1")
+            if time_range:
+                params = build_stage_params(stage, time_range)
+            else: 
+                params = build_stage_params(stage)
+            try:
+                params = get_selected_group_ids(params)
+                df = api.get_keyword_frequency(params=params)
+                chart = render_chart(df, option, "keyword", "count",key_prefix="chart1")
+                if chart: 
+                    left_placeholder.altair_chart(chart, use_container_width=True)
+            except Exception as e:
+                st.error(f"Failed to fetch data: {e}")
+
+        #NEW KEYWORDS PREDICTION
+        st.markdown("---")
+        with st.container(border=True):
+            st.write("New Keywords Prediction")
+            right_placeholder = st.empty()
+            col1, col2 = st.columns(2)
+            with col1:
+                option2 = st.selectbox(
+                        "Select chart type",
+                        ("Bar Chart", "Pie Chart"),
+                        key="chart2_type",
+                        index = 0
+                    )
+                chart_type2 = st.session_state.chart2_type
+            with col2:
+                top_n = st.slider(
+                    "Select number of top keywords",
+                    min_value=5,
+                    max_value=20,
+                    value=10,
+                    step = 5,
+                    key="top_n",
+                )  
+                selected_topn = st.session_state.top_n
+            params2 = {"top_k": top_n}
+            params2 = get_selected_group_ids(params2)
+            with st.spinner("Fetching new keyword predictions..."):
+                try:
+                    df2 = api.new_keywords(params=params2)
+                    chart = render_chart(df2,option2, "keyword", "score",key_prefix="chart2")
+                    if chart: 
+                        right_placeholder.altair_chart(chart, use_container_width=True)
+
+                except Exception as e:
+                    st.error(f"Failed to fetch data: {e}")
+    else:
+        st.empty()
