@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import altair as alt
 from style import apply_custom_style
 import numpy as np
+import re
+
 
 
 st.set_page_config(page_title="Data Visualization Dashboard", layout="wide")
@@ -141,6 +143,7 @@ def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""
 
         x_label = x_field.capitalize() if x_field != "sentiment" else "Sentiment"
         y_label = "Mentions" if y_field == "count" else y_field.capitalize()
+        
 
         chart = (
             alt.Chart(df_plot)
@@ -191,8 +194,10 @@ def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""
             )
         )
         return (chart + text).properties(height=400)
+
     elif chart_type == "Pie Chart":
         df = df.dropna(subset=[x_field, y_field]).copy()
+        df = df[df[y_field] > 0]  
         df["percent"] = (df[y_field] / df[y_field].sum() * 100).round(1)
         df["label"] = df[x_field] + " (" + df["percent"].astype(str) + "%)"
 
@@ -241,6 +246,7 @@ def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""
             )
             .transform_filter("datum.percent < 8")
         )
+        
 
         return (pie + inside_labels + outside_labels).properties(height=420)
 
@@ -300,7 +306,7 @@ def manage_keywords(placeholder, session_key, brand_name):
                 return
 
             try:
-                api.add_keyword({"brand_name": brand_name, "keyword": search_keyword})
+                api.add_keyword(params={"brand_name": brand_name, "keyword": search_keyword})
                 st.session_state[session_key].append(search_keyword)
                 st.success(f"Added '{search_keyword}'")
                 st.rerun()  
@@ -314,7 +320,7 @@ def manage_keywords(placeholder, session_key, brand_name):
                 with col1:
                     if st.button(f"{kw} ╳", key=f"remove_{session_key}_{kw}"):
                         try:
-                            api.remove_keyword({"brand_name": brand_name, "keyword": kw})
+                            api.remove_keyword(params={"brand_name": brand_name, "keyword": kw})
                             st.session_state[session_key].remove(kw)
                             st.success(f"Removed '{kw}'")
                             st.rerun()
@@ -340,12 +346,13 @@ with tab1:
             st.write("Keyword Frequency")
             left_placeholder = st.empty() 
             
-            stage = st.selectbox("Select Stage", ("None","Pregnant(0 to 9 months)","Infant/Preschool(1 to 18 months)","Weaning(4 to 16 months)","Preschool(18 months to 5yo)","Enrinchment(3 to 6yo)","Other"), key="stage_select", index=0)
+            stage = st.selectbox("Select Stage", ("None", "Pregnant (0 to 9 months)", "Weaning (4 to 16 months)", "Infant (1 to 18 months)", "Preschool (18 months to 5yo)", "Enrichment (3 to 6yo)", "Current Month"), key="stage_select", index=0)
             if stage == "None":
                 params = {}
             #selecting chart type 
             col1, col2 = st.columns(2)
             with col1:
+
                 option = st.selectbox(
                     "Select chart type",
                     ("Bar Chart", "Pie Chart"),
@@ -407,6 +414,8 @@ with tab1:
         st.empty()
 
 
+
+
 #TAB2 - Brand Analysis
 with tab2:
     set_active_tab("Brand")
@@ -417,10 +426,12 @@ with tab2:
 
         brand_name = st.selectbox(
             "Select Brand",
-            ("mamypoko", "huggies", "pampers","drypers","merries","offspring","rascal & friends","applecrumby","hey tiger",
-            "nino nana"),
-            key="brand_select"
-        )
+            ('mamypoko','huggies','pampers','drypers','merries','offspring','rascal & friends','applecrumby','hey tiger','nino nana',
+    'homie','nan','lactogen','friso','enfamil','aptamil','s26','dumex dugro','bellamy organic','karihome','mount alvernia',
+    'thomson medical centre','mount elizabeth','gleneagles','raffles hospital','national university hospital',
+    'kkh','parkway east hospital','singapore general hospital','sengkang general hospital','changi general hospital',
+    'gerber','little blossom','rafferty garden','heinz baby','ella kitchen','holle','only organic','happy baby organics'),
+            key="brand_select")
         st.write(f"You selected: {brand_name}")
 
         if "last_brand" not in st.session_state:
@@ -445,6 +456,7 @@ with tab2:
                 )
                 chart_type = st.session_state.chart3_type
             with col2:
+                #IDC, I GENU
                 time_range = time_range_selector("Time",key="time2")
             if time_range:
                 params = {"brand_name": brand_name, **time_range}
@@ -480,6 +492,8 @@ with tab2:
             try:
                 params = get_selected_group_ids(params)
                 df = api.get_sentiment_analysis(params=params)
+                data = api.get_sentiment_analysis(params=params)
+                st.json(data)
                 if "error" in df.columns:
                     st.error(df["error"].iloc[0])
                 elif "sentiment" not in df.columns or "value" not in df.columns:
@@ -488,39 +502,135 @@ with tab2:
                     chart = render_chart(df, "Pie Chart", "sentiment", "value",key_prefix="chart4")
                     if chart: 
                         right_placeholder.altair_chart(chart, use_container_width=True)
+                        st.write("💬 Sentiment Breakdown")
+                        examples = data.get("examples", [])
+                        positive_col, negative_col = st.columns(2)
+
+                        with positive_col:
+                            st.write("#### Positive Words / Phrases")
+                            if not examples or all(len(ex.get("top_positive_words", [])) == 0 for ex in examples):
+                                st.info("No positive words detected.")
+                            else:
+                                for ex in examples:
+                                    pos = [w for w, _ in ex.get("top_positive_words", [])]
+                                    if pos:
+                                        st.markdown(f"• {', '.join(pos)}")
+
+                        with negative_col:
+                            st.write("#### Negative Words / Phrases")
+                            if not examples or all(len(ex.get("top_negative_words", [])) == 0 for ex in examples):
+                                st.info("No negative words detected.")
+                            else:
+                                for ex in examples:
+                                    neg = [w for w, _ in ex.get("top_negative_words", [])]
+                                    if neg:
+                                        st.markdown(f"• {', '.join(neg)}")
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
+
+            #TODO: displaying top 5 keywords for both positie and negtive sentiment
         
-        #CONSUMER PERCEPTION
-        with st.container(border = True):
+        #CONSUMER PERCEPTIOn
+        #CONSUMER PERCEPTION (Updated Section)
+        with st.container(border=True):
             st.write("Consumer Perception Analysis")
             bottom_placeholder = st.empty()
-            #selecting chart type
+
             col1, col2 = st.columns(2)
             with col1:
                 option = st.selectbox(
                     "Select chart type",
-                    ("Bar Chart","Pie Chart"),
+                    ("Bar Chart", "Pie Chart"),
                     key="chart5_type"
                 )
                 chart_type = st.session_state.chart5_type
             with col2:
-                time_range = time_range_selector("Time",key="time4")
+                time_range = time_range_selector("Time", key="time4")
 
-            params = {"brand_name":brand_name, **time_range}if time_range else {"brand_name":brand_name}
-            try: 
+            params = {"brand_name": brand_name, **time_range} if time_range else {"brand_name": brand_name}
+
+            # ✅ Initialize per-brand remove list
+            key_name = f"removed_words_{brand_name}"
+            if key_name not in st.session_state:
+                st.session_state[key_name] = []
+
+            try:
                 params = get_selected_group_ids(params)
                 df = api.get_consumer_perception(params=params)
+
                 if "error" in df.columns:
                     st.error(df["error"].iloc[0])
-                elif "word" not in df.columns or "co_occurrence_score" not in df.columns:
+                elif "word" not in df.columns or "count" not in df.columns:
                     st.warning("No valid topic data returned.")
                 else:
-                    chart = render_chart(df, chart_type, "word", "co_occurrence_score",key_prefix="chart5")
-                    if chart:
-                        bottom_placeholder.altair_chart(chart, use_container_width=True)
+                    st.write("✂️ Remove Words from Chart")
+
+                    # --- Create a form for word removal ---
+                    with st.form(key=f"{brand_name}_remove_form", clear_on_submit=True):
+                        new_words_input = st.text_input(
+                            "Enter word(s) to remove (comma or space separated):",
+                            key=f"{brand_name}_remove_input",
+                            placeholder="e.g. fit, baby, leak"
+                        )
+                        submit_button = st.form_submit_button("Remove Words")
+
+                    # --- Handle form submission ---
+                    if submit_button and new_words_input:
+                        # Split by comma or whitespace and clean up
+                        words_to_add = [
+                            w.strip().lower() 
+                            for w in re.split(r"[,\s]+", new_words_input.strip()) 
+                            if w.strip()
+                        ]
+                        
+                        added_count = 0
+                        for word in words_to_add:
+                            if word and word not in st.session_state[key_name]:
+                                st.session_state[key_name].append(word)
+                                added_count += 1
+                        
+                        if added_count > 0:
+                            st.success(f"✅ Removed {added_count} word(s) from chart")
+                            st.rerun()
+                        else:
+                            st.info("All entered words were already in the remove list")
+
+                    # --- Display removable chips ---
+                    if st.session_state[key_name]:
+                        st.markdown("**Currently removed words:**")
+                        
+                        # Create dynamic columns based on number of words
+                        num_words = len(st.session_state[key_name])
+                        cols_per_row = 5
+                        
+                        for i in range(0, num_words, cols_per_row):
+                            cols = st.columns(min(cols_per_row, num_words - i))
+                            for j, col in enumerate(cols):
+                                if i + j < num_words:
+                                    word = st.session_state[key_name][i + j]
+                                    with col:
+                                        if st.button(f"✕ {word}", key=f"undo_{brand_name}_{word}_{i}_{j}"):
+                                            st.session_state[key_name].remove(word)
+                                            st.success(f"✅ Added '{word}' back to chart")
+                                            st.rerun()
+
+                    # --- Apply filters ---
+                    if st.session_state[key_name]:
+                        pattern = "|".join([re.escape(w) for w in st.session_state[key_name]])
+                        df = df[~df["word"].str.contains(pattern, case=False, na=False)]
+
+                    # --- Render chart ---
+                    if df.empty:
+                        st.warning("All words removed — nothing to display.")
+                    else:
+                        chart = render_chart(df, chart_type, "word", "count", key_prefix="chart5")
+                        if chart:
+                            bottom_placeholder.altair_chart(chart, use_container_width=True)
+
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
+
+
 
     else:
         st.empty()
@@ -804,5 +914,6 @@ with tab4:
         
     else:
         st.empty()
+\
 
 

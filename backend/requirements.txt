@@ -1,7 +1,20 @@
+# project-root/requirements.txt
+
+# Backend deps
+fastapi
+uvicorn
 pandas
-matplotlib
-requests
+scikit-learn
+regex
+python-multipart
+pydantic
 numpy
 spacy
 sentence-transformers
 keybert
+
+# Frontend deps
+streamlit
+matplotlib
+altair
+requests
