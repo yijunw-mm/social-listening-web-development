@@ -5,6 +5,7 @@ import pandas as pd
 import re
 from sklearn.feature_extraction.text import CountVectorizer
 from keybert import KeyBERT
+from backend.model_loader import kw_model,encoder
 from sentence_transformers import SentenceTransformer, util 
 import spacy
 
@@ -93,8 +94,8 @@ def get_share_of_voice(group_id:Optional[List[str]]=Query(None)):
 #-------consumer perception----------
 
 nlp = spacy.load("en_core_web_sm")
-semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
-kw_model = KeyBERT(model='all-MiniLM-L6-v2')
+#semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
+#kw_model = KeyBERT(model='all-MiniLM-L6-v2')
 
 def _overlap_fraction(a, b):
     """calculate the overlap percentage between two phrases token"""
@@ -144,7 +145,7 @@ def extract_clean_brand_keywords_auto(texts, brand_name, top_k=15):
     # Step 4️⃣ calculate semantic centre
     if not keywords:
         return []
-    kw_emb = semantic_model.encode(keywords, convert_to_tensor=True)
+    kw_emb = encoder.encode(keywords, convert_to_tensor=True)
     centroid = kw_emb.mean(dim=0, keepdim=True)
 
     # Step 5️⃣ calculate similarity of each word and the centre
@@ -183,7 +184,7 @@ def category_consumer_perception(category_name:str,
     df = df_cleaned.copy()
     if group_id:
         df = df[df["group_id"].isin(group_id)]
-    # Step 3️⃣ 获取包含品牌名的文本
+    #  extract brand name relevant text
     pattern = "|".join([rf"\b{re.escape(b)}\b" for b in brand_in_category])
     relevant_texts = (
         df["clean_text"]
@@ -196,18 +197,17 @@ def category_consumer_perception(category_name:str,
     if not relevant_texts:
         return {
             "category": category_name,
-            "associated_words": [],
-            "share_of_voice": []
+            "associated_words": []
         }
 
-    # Step 4️⃣ 提取品类级别的关键词
+    # Step 4️⃣ extract keyword
     associated_words = extract_clean_brand_keywords_auto(
         relevant_texts,
-        brand_name=category_name,  # 品类名占位
+        brand_name="",  
         top_k=top_k
     )
 
-    # Step 6️⃣ 返回统一结果
+    # Step 6️⃣ print result
     return {
         "category": category_name,
         "associated_words": associated_words

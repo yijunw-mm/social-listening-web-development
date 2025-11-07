@@ -3,9 +3,14 @@ from typing import Optional, List
 import pandas as pd
 from keybert import KeyBERT
 from collections import Counter
+import sys 
+sys.path.append("..")
+from backend.model_loader import kw_model,encoder
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import random
 
 router = APIRouter()
-kw_model = KeyBERT(model='all-MiniLM-L6-v2')
+#kw_model = KeyBERT(model='all-MiniLM-L6-v2')
 
 # load data
 df_chat = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
@@ -44,8 +49,8 @@ def new_keyword_prediction(group_id: Optional[str] = None,
                            year: Optional[int]=None,
                            month: Optional[int] = None,
                            quarter: Optional[int] = None,
-                           top_k: int = 20):
-    batch_size =200
+                           top_k: int = 10):
+    batch_size =100
     df = df_chat
     if group_id:
         df = df[df["group_id"] == group_id]
@@ -57,18 +62,29 @@ def new_keyword_prediction(group_id: Optional[str] = None,
         df = df[df["quarter"]== quarter]
 
     texts = df["clean_text"].dropna().astype(str).tolist()
+    max_docs = 5000
+    if len(texts)>max_docs:
+        random.seed(42)
+        texts = random.sample(texts,max_docs)
+    encoder.encode(["warmup"], show_progress_bar=False)
     all_keywords=[]
-    for i in range(0,len(texts),batch_size):
-        chunk = texts[i:i+batch_size]
-        chunk_text =" ".join(chunk)
+    def process_chunk(start):
+        chunk_text =" ".join(texts[start:start+batch_size])
         try:
             keywords = kw_model.extract_keywords(chunk_text, keyphrase_ngram_range=(1, 2),
-                                                 stop_words='english', top_n=15,
+                                                 stop_words='english', top_n=10,
                                                  use_mmr=True, diversity=0.6)
-            
-            all_keywords.extend(keywords)
+            return keywords
         except Exception as e:
-            print(f"error in batch {i//batch_size}:{e}")
+            print(f"error in batch {start//batch_size}: {e}")
+            return []
+
+    with ThreadPoolExecutor(max_workers=4) as executor:  # 🚀 并行4线程
+        futures = [executor.submit(process_chunk, i) for i in range(0, len(texts), batch_size)]
+        for f in as_completed(futures):
+            all_keywords.extend(f.result())
+
+            
 
     keyword_score_map={}
     for kw,score in all_keywords:

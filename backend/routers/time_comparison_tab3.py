@@ -163,33 +163,30 @@ def keyword_frequency(
         return {"error": f"Brand '{brand_name}' not found."}
     #keywords = brand_keyword_dict[brand_name]
 
-    # 3. get the message containing brand name
-    matched_texts = [
-        text for text in df["clean_text"].dropna()
-        if re.search(rf"\b{re.escape(brand_name)}\b",text.lower())
-    ]
 
     # 4. compute sentiment analysis
-    sentiment_result = {"positive": 0, "neutral": 0, "negative": 0}
-    detailed_examples= []
-    for text in matched_texts:
-        score = analyzer.polarity_scores(text)
-        compound = score["compound"]
-        if compound >= 0.05:
-            sentiment_result["positive"] += 1
-        elif compound <= -0.05:
-            sentiment_result["negative"] += 1
-        else:
-            sentiment_result["neutral"] += 1
-        
-        # 4.5 explain the contribution
-        explanation = explain_sentiment(text, top_n=5)
-        detailed_examples.append({
-            "text": text,
-            "sentiment_score": score,
-            "top_positive_words": explanation["positives"],
-            "top_negative_words": explanation["negatives"]
-        })
+    def analyze_sentiment(texts):
+        sentiment_result = {"positive": 0, "neutral": 0, "negative": 0}
+        detailed_examples= []
+        for text in texts:
+            score = analyzer.polarity_scores(text)
+            compound = score["compound"]
+            if compound >= 0.05:
+                sentiment_result["positive"] += 1
+            elif compound <= -0.05:
+                sentiment_result["negative"] += 1
+            else:
+                sentiment_result["neutral"] += 1
+            
+            # 4.5 explain the contribution
+            explanation = explain_sentiment(text, top_n=5)
+            detailed_examples.append({
+                "text": text,
+                "sentiment_score": score,
+                "top_positive_words": explanation["positives"],
+                "top_negative_words": explanation["negatives"]
+            })
+        return sentiment_result,detailed_examples
 
 
     def filter_df(df: pd.DataFrame, time: int, granularity: str):
@@ -205,71 +202,54 @@ def keyword_frequency(
             raise ValueError("Invalid granularity")
         
         #anlyze one subset
-
-    def analyze_sentiment(df_subset: pd.DataFrame, keywords: list):
-        texts = df_subset["clean_text"].dropna().tolist()
-        
-         # 4. compute sentiment analysis
-    sentiment_result = {"positive": 0, "neutral": 0, "negative": 0}
-    detailed_examples= []
-    for text in matched_texts:
-        score = analyzer.polarity_scores(text)
-        compound = score["compound"]
-        if compound >= 0.05:
-            sentiment_result["positive"] += 1
-        elif compound <= -0.05:
-            sentiment_result["negative"] += 1
-        else:
-            sentiment_result["neutral"] += 1
-        
-        # 4.5 explain the contribution
-        explanation = explain_sentiment(text, top_n=5)
-        detailed_examples.append({
-            "text": text,
-            "sentiment_score": score,
-            "top_positive_words": explanation["positives"],
-            "top_negative_words": explanation["negatives"]
-        })
-    
-    # 5. output
-    total = len(matched_texts)
-    if total == 0:
-        return {
-            "brand": brand_name,
-            "total_mentions": 0,
-            "sentiment_percent": {},
-            "sentiment_count": {},
-            "examples": []
-        }
-
-    sentiment_percent_list = [{
-        "sentiment":k,"value": round(v / total * 100, 1)} for k, v in sentiment_result.items()
-    ]
-    sentiment_count_list =[
-        {"sentiment":k, "value":v} for k,v in sentiment_result.items()
-    ]
-    return {
-        "brand": brand_name,
-        "total_mentions": total,
-        "sentiment_percent": sentiment_percent_list,
-        "sentiment_count": sentiment_count_list,
-        "examples":detailed_examples[:5]
-    }
-
-    # 5. analyze two time periods
     df1 = filter_df(df, time1, granularity)
     df2 = filter_df(df, time2, granularity)
+    # 3. get the message containing brand name
+    pattern = re.compile(rf"\b{re.escape(brand_name)}\b",re.IGNORECASE)
+    text1 = [t for t in df1["clean_text"].dropna() if pattern.search(t)]
+    text2 = [t for t in df2["clean_text"].dropna() if pattern.search(t)]
+    sentiment_result1, detailed_examples1 = analyze_sentiment(text1)
+    sentiment_result2, detailed_examples2 = analyze_sentiment(text2)
 
-    result = {
-        str(time1): analyze_sentiment(df1, keywords),
-        str(time2): analyze_sentiment(df2, keywords)
-    }
+    total_mentions1 = len(text1)
+    total_mentions2 = len(text2)
 
+    sentiment_percent_list1 = [{
+        "sentiment":k,"value": round(v / total_mentions1 * 100, 1)} for k, v in sentiment_result1.items()
+    ]
+    sentiment_count_list1 =[
+        {"sentiment":k, "value":v} for k,v in sentiment_result1.items()
+    ]
+
+    sentiment_percent_list2 = [{
+        "sentiment":k,"value": round(v / total_mentions2 * 100, 1)} for k, v in sentiment_result2.items()
+    ]
+    sentiment_count_list2 =[
+        {"sentiment":k, "value":v} for k,v in sentiment_result2.items()
+    ]
     return {
         "brand": brand_name,
         "granularity": granularity,
-        "compare": result
+        "compare": {
+            str(time1): {
+                "total_mentions": total_mentions1,
+                "sentiment_percent": sentiment_percent_list1,
+                "sentiment_count": sentiment_count_list1,
+                "examples": detailed_examples1[:5]
+            },
+            str(time2): {
+                "total_mentions": total_mentions2,
+                "sentiment_percent": sentiment_percent_list2,
+                "sentiment_count": sentiment_count_list2,
+                "examples": detailed_examples2[:5]
+            }
+        }
+
     }
+
+
+
+
 
 def _normalize_quotes(s: str) -> str:
     if not isinstance(s, str):
