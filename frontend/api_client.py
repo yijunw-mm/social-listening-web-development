@@ -70,35 +70,52 @@ def get_time_compare_share_of_voice(params: dict = None) -> pd.DataFrame:
     resp.raise_for_status()
     return resp.json()
 def get_share_of_voice(params: dict = None) -> pd.DataFrame:
+    """
+    Get share of voice for a category.
+    Backend returns: {category_name: {share_of_voice: [...], total_mentions: ...}, ...}
+    We need to extract the specific category's data.
+    """
     url = f"{base_api}/category/share-of-voice"
     resp = requests.get(url, params=params, timeout=100)
     resp.raise_for_status()
     data = resp.json()
 
-    if "compare" not in data:
-        return pd.DataFrame(columns=["brand", "percent", "time_period"])
+    # Extract category_name from params (required)
+    category_name = params.get("category_name") if params else None
+    
+    if not category_name:
+        return pd.DataFrame(columns=["brand", "percentage"])
+    
+    # Backend returns data organized by category
+    # Format: {category_name: {share_of_voice: [...], total_mentions: X}}
+    if category_name in data:
+        category_data = data[category_name]
+        share_list = category_data.get("share_of_voice", [])
+        return pd.DataFrame(share_list)
+    
+    # If category not found or no data
+    return pd.DataFrame(columns=["brand", "percentage"])
 
-    rows = []
-    compare = data["compare"]
 
-    for period, info in compare.items():
-        share_items = info.get("share_of_voice", [])
-        for entry in share_items:
-            rows.append({
-                "time_period": period,
-                "brand": entry.get("brand", "Unknown"),
-                "percent": entry.get("percent", 0)
-            })
-
-    return pd.DataFrame(rows)
 def get_category_consumer_perception(params: dict = None) -> pd.DataFrame:
+    """
+    Get consumer perception for a category.
+    Backend returns: {category: str, associated_words: [{word: str, count: int}, ...]}
+    """
     url = f"{base_api}/category/consumer-perception"
-    resp = requests.get(url, params=params, timeout=100)
+    resp = requests.get(url, params=params, timeout=500)
     resp.raise_for_status()
     data = resp.json()
 
+    # Handle error responses
+    if "error" in data:
+        return pd.DataFrame([{"word": "Error", "count": 0, "error": data["error"]}])
+    
+    # Extract associated_words list
     if isinstance(data, dict) and "associated_words" in data:
-        return pd.DataFrame(data["associated_words"])
-
+        words_list = data["associated_words"]
+        if words_list:
+            return pd.DataFrame(words_list)
+    
+    # No data found
     return pd.DataFrame(columns=["word", "count"])
-
