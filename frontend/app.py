@@ -124,9 +124,10 @@ sentiment_colors = {
 #group ids
 def get_selected_group_ids(params: dict = None) -> dict:
     params = params.copy() if params else {}
-    selected_group = st.session_state.get("selected_groups", [])
-    if selected_group:
+    selected_group = st.session_state.get("selected_groups", None)
+    if selected_group and len(selected_group) > 0:
         params["group_id"] = selected_group
+
     return params
 
 #render chart
