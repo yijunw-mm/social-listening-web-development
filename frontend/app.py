@@ -450,8 +450,11 @@ with tab1:
                     right_placeholder.altair_chart(chart, use_container_width=True)
 
                 # --- Examples & Word Breakdown ---
-                st.markdown("<br>", unsafe_allow_html=True)
+                # --- Examples & Word Breakdown ---
+                st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+
                 with st.expander("📄 View Top 5 Messages"):
+
 
                     examples = data.get("examples", [])
 
@@ -768,7 +771,7 @@ with tab2:
                     if chart:
                         sentiment_placeholder.altair_chart(chart, use_container_width=True)
 
-                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
                 with st.expander("📝 Top 5 Messages Comparison"):
 
@@ -1051,6 +1054,7 @@ with tab5:
                 elif "word" not in df.columns or "count" not in df.columns:
                     st.error(f"Invalid data structure returned. Expected columns: 'word', 'count'. Got: {df.columns.tolist()}")
                 else:
+                    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
                     # --- Remove Words UI ---
                     st.write("✂️ Remove Words from Chart")
 
