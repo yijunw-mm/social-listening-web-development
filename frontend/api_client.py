@@ -105,7 +105,6 @@ def get_share_of_voice(params: dict = None) -> pd.DataFrame:
     # If category not found or no data
     return pd.DataFrame(columns=["brand", "percentage"])
 
-
 @st.cache_data()
 def get_category_consumer_perception(params: dict = None) -> pd.DataFrame:
     """

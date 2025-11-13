@@ -204,6 +204,7 @@ def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""
         )
         return (chart + text).properties(height=400)
 
+
     elif chart_type == "Pie Chart":
         df = df.dropna(subset=[x_field, y_field]).copy()
         df = df[df[y_field] > 0]  
@@ -413,46 +414,63 @@ with tab1:
         with st.container(border=True):
             st.write("Sentiment Analysis %")
             right_placeholder = st.empty()
-            time_range = time_range_selector("Time",key="time3")
-            params = {"brand_name":brand_name, **time_range} if time_range else {"brand_name":brand_name}
+            time_range = time_range_selector("Time", key="time3")
+
+            params = {"brand_name": brand_name, **time_range} if time_range else {"brand_name": brand_name}
+            params = get_selected_group_ids(params)
+
             try:
-                params = get_selected_group_ids(params)
-                df = api.get_sentiment_analysis(params=params)
-                examples = df.get("examples", [])
-                if "error" in df.columns:
-                    st.error(df["error"].iloc[0])
-                elif "sentiment" not in df.columns or "value" not in df.columns:
-                    st.warning("No valid sentiment data returned.")
-                else: 
-                    chart = render_chart(df, "Pie Chart", "sentiment", "value",key_prefix="chart4")
-                    if chart: 
+                data = api.get_sentiment_analysis(params=params)
+
+                # Extract examples for later
+                examples = data.get("examples", [])
+
+                # Flatten sentiment percent data
+                sentiment_list = data.get("sentiment_percent", [])
+                rows = [
+                    {"sentiment": item["sentiment"], "value": item["value"]}
+                    for item in sentiment_list
+                ]
+
+                df = pd.DataFrame(rows)
+
+                if df.empty:
+                    st.warning("No sentiment data returned.")
+                else:
+                    chart = render_chart(df, "Pie Chart", "sentiment", "value", key_prefix="chart4")
+                    if chart:
                         right_placeholder.altair_chart(chart, use_container_width=True)
-                        st.write("💬 Sentiment Breakdown")
-                        positive_col, negative_col = st.columns(2)
 
-                        with positive_col:
-                            st.write("#### Positive Words / Phrases")
-                            if not examples or all(len(ex.get("top_positive_words", [])) == 0 for ex in examples):
-                                st.info("No positive words detected.")
-                            else:
-                                for ex in examples:
-                                    pos = [w for w, _ in ex.get("top_positive_words", [])]
-                                    if pos:
-                                        st.markdown(f"• {', '.join(pos)}")
+                    # Breakdown of examples
+                    st.write("💬 Sentiment Breakdown")
+                    col1, col2 = st.columns(2)
 
-                        with negative_col:
-                            st.write("#### Negative Words / Phrases")
-                            if not examples or all(len(ex.get("top_negative_words", [])) == 0 for ex in examples):
-                                st.info("No negative words detected.")
-                            else:
-                                for ex in examples:
-                                    neg = [w for w, _ in ex.get("top_negative_words", [])]
-                                    if neg:
-                                        st.markdown(f"• {', '.join(neg)}")
+                    with col1:
+                        st.write("Positive Words")
+                        positive_words = [
+                            w for ex in examples for (w, _) in ex.get("top_positive_words", [])
+                        ]
+                        if positive_words:
+                            for w in positive_words:
+                                st.markdown(f"• {w}")
+                        else:
+                            st.info("No positive words detected.")
+
+                    with col2:
+                        st.write("Negative Words")
+                        negative_words = [
+                            w for ex in examples for (w, _) in ex.get("top_negative_words", [])
+                        ]
+                        if negative_words:
+                            for w in negative_words:
+                                st.markdown(f"• {w}")
+                        else:
+                            st.info("No negative words detected.")
+
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
 
-            #TODO: displaying top 5 keywords for both positie and negtive sentiment
+
         
         #CONSUMER PERCEPTIOn
         with st.container(border=True):
@@ -655,7 +673,6 @@ with tab2:
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
 
-        #sentiment analysis over time
         # SENTIMENT ANALYSIS over time
         with st.container(border=True):
             st.write("Sentiment Analysis %")
@@ -721,17 +738,20 @@ with tab2:
             try:
                 data = api.get_time_compare_sentiment(params=params)
 
-                sentiment_list = data.get("sentiment_percent", [])
-                compare_data = []
+                compare = data.get("compare", {})
+                rows = []
 
-                for item in sentiment_list:
-                    compare_data.append({
-                        "time_period": f"{time1} vs {time2}",
-                        "sentiment": item["sentiment"],
-                        "percentage": item["value"],
-                    })
+                # Extract sentiment% for each time period
+                for period, content in compare.items():
+                    sentiment_list = content.get("sentiment_percent", [])
+                    for item in sentiment_list:
+                        rows.append({
+                            "time_period": period,
+                            "sentiment": item["sentiment"],
+                            "percentage": item["value"]
+                        })
 
-                df_plot = pd.DataFrame(compare_data)
+                df_plot = pd.DataFrame(rows)
 
                 if df_plot.empty:
                     st.warning("No sentiment data for selected periods.")
@@ -742,7 +762,6 @@ with tab2:
 
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
-
 
 
        #share of voice
