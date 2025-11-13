@@ -89,33 +89,6 @@ with st.sidebar:
     st.button("🔒 Logout")
 
 
-# --- Create theme function ---
-def no_background():
-    return {
-        "config": {
-            "background": "white",
-            "view": {
-                "fill": "white",
-                "stroke": "transparent"
-            },
-            "axis": {
-                "domainColor": "black",
-                "labelColor": "black",
-                "titleColor": "black"
-            },
-            "legend": {
-                "labelColor": "black",
-                "titleColor": "black"
-            }
-        }
-    }
-
-# --- Register theme (Altair 5 correct way) ---
-alt.theme.register("no_background", no_background)
-
-# --- Enable theme globally ---
-alt.theme.enable("no_background")
-
 
 #TAB 1 - General Analysis
 custom_colors = [
