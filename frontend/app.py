@@ -414,58 +414,103 @@ with tab1:
         with st.container(border=True):
             st.write("Sentiment Analysis %")
             right_placeholder = st.empty()
+
+            # --- Time Selector ---
             time_range = time_range_selector("Time", key="time3")
 
-            params = {"brand_name": brand_name, **time_range} if time_range else {"brand_name": brand_name}
+            params = {"brand_name": brand_name}
+            if time_range:
+                params.update(time_range)
+
             params = get_selected_group_ids(params)
 
             try:
                 data = api.get_sentiment_analysis(params=params)
 
-                # Extract examples for later
-                examples = data.get("examples", [])
+                # If no mentions
+                if data.get("total_mentions", 0) == 0:
+                    st.warning("No sentiment data available for this brand in the selected period.")
+                    st.stop()
 
-                # Flatten sentiment percent data
+                # --- Build DataFrame ---
                 sentiment_list = data.get("sentiment_percent", [])
-                rows = [
-                    {"sentiment": item["sentiment"], "value": item["value"]}
-                    for item in sentiment_list
-                ]
+                df = pd.DataFrame(sentiment_list)
 
-                df = pd.DataFrame(rows)
+                # Normalize
+                if not df.empty:
+                    df["sentiment"] = df["sentiment"].str.lower()
 
                 if df.empty:
                     st.warning("No sentiment data returned.")
-                else:
-                    chart = render_chart(df, "Pie Chart", "sentiment", "value", key_prefix="chart4")
-                    if chart:
-                        right_placeholder.altair_chart(chart, use_container_width=True)
+                    st.stop()
 
-                    # Breakdown of examples
-                    st.write("💬 Sentiment Breakdown")
-                    col1, col2 = st.columns(2)
+                # --- PIE CHART ---
+                chart = render_chart(df, "Pie Chart", "sentiment", "value", key_prefix="chart4")
+                if chart:
+                    right_placeholder.altair_chart(chart, use_container_width=True)
 
-                    with col1:
-                        st.write("Positive Words")
-                        positive_words = [
-                            w for ex in examples for (w, _) in ex.get("top_positive_words", [])
-                        ]
-                        if positive_words:
-                            for w in positive_words:
-                                st.markdown(f"• {w}")
-                        else:
-                            st.info("No positive words detected.")
+                # --- Examples & Word Breakdown ---
+                st.write("### 💬 Sentiment Breakdown")
 
-                    with col2:
-                        st.write("Negative Words")
-                        negative_words = [
-                            w for ex in examples for (w, _) in ex.get("top_negative_words", [])
-                        ]
-                        if negative_words:
-                            for w in negative_words:
-                                st.markdown(f"• {w}")
-                        else:
-                            st.info("No negative words detected.")
+                examples = data.get("examples", [])
+
+                # Collect and dedupe top words
+                positive_words = sorted({w for ex in examples for (w, _) in ex.get("top_positive_words", [])})
+                negative_words = sorted({w for ex in examples for (w, _) in ex.get("top_negative_words", [])})
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("Positive Keywords")
+                    if positive_words:
+                        for w in positive_words:
+                            st.markdown(f"• **{w}**")
+                    else:
+                        st.info("No positive words detected.")
+
+                with col2:
+                    st.subheader("Negative Keywords")
+                    if negative_words:
+                        for w in negative_words:
+                            st.markdown(f"• **{w}**")
+                    else:
+                        st.info("No negative words detected.")
+
+                # Optional: show example sentences
+                with st.expander("📄 View Top 5 Messages"):
+
+                    examples = data.get("examples", [])
+
+                    if not examples:
+                        st.info("No sample messages detected.")
+                    else:
+                        for i, ex in enumerate(examples[:5]):
+                            with st.container(border=True):
+                                st.markdown(f"#### ✉️ Message {i+1}")
+
+                                # Show the actual text
+                                st.markdown(f"**Text:** {ex['text']}")
+
+                                # Sentiment info
+                                st.markdown(
+                                    f"**Sentiment:** `{ex['sentiment']}`  | "
+                                    f"**Score:** `{ex['sentiment_score']}`  | "
+                                    f"**Rule Applied:** `{ex['rule_applied']}`"
+                                )
+
+                                # Contribution words
+                                pos_words = ", ".join([w for (w, _) in ex.get("top_positive_words", [])]) or "None"
+                                neg_words = ", ".join([w for (w, _) in ex.get("top_negative_words", [])]) or "None"
+
+                                col1, col2 = st.columns(2)
+
+                                with col1:
+                                    st.markdown("**Positive Contributors**")
+                                    st.info(pos_words)
+
+                                with col2:
+                                    st.markdown("**Negative Contributors**")
+                                    st.error(neg_words)
+
 
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
@@ -759,6 +804,47 @@ with tab2:
                     chart = render_chart(df_plot, "Bar Chart", "sentiment", "percentage", key_prefix="chart_sent_tab2")
                     if chart:
                         sentiment_placeholder.altair_chart(chart, use_container_width=True)
+
+                with st.expander("📝 Top 5 Messages Comparison"):
+
+                    compare = data.get("compare", {})
+
+                    for period, content in compare.items():
+                        examples = content.get("examples", [])
+
+                        st.markdown(f"## 📅 Period: **{period}**")
+
+                        if not examples:
+                            st.info(f"No sample messages available for {period}.")
+                            continue
+
+                        for i, ex in enumerate(examples[:5]):
+                            with st.container(border=True):
+                                st.markdown(f"#### ✉️ Message {i+1}")
+
+                                # Main text
+                                st.markdown(f"**Text:** {ex.get('text', 'N/A')}")
+
+                                # Sentiment metadata
+                                st.markdown(
+                                    f"**Sentiment:** `{ex.get('sentiment')}`  | "
+                                    f"**Score:** `{ex.get('sentiment_score')}`  | "
+                                    f"**Rule Applied:** `{ex.get('rule_applied') or 'None'}` |"
+                                )
+
+                                # Contributing words
+                                pos_words = ", ".join([w for (w, _) in ex.get("top_positive_words", [])]) or "None"
+                                neg_words = ", ".join([w for (w, _) in ex.get("top_negative_words", [])]) or "None"
+
+                                col1, col2 = st.columns(2)
+
+                                with col1:
+                                    st.markdown("**Positive Contributors**")
+                                    st.info(pos_words)
+
+                                with col2:
+                                    st.markdown("**Negative Contributors**")
+                                    st.error(neg_words)
 
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")

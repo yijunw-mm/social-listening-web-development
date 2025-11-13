@@ -85,7 +85,7 @@ def get_share_of_voice(params: dict = None) -> pd.DataFrame:
     We need to extract the specific category's data.
     """
     url = f"{base_api}/category/share-of-voice"
-    resp = requests.get(url, params=params, timeout=100)
+    resp = requests.get(url, params=params, timeout=300)
     resp.raise_for_status()
     data = resp.json()
 
