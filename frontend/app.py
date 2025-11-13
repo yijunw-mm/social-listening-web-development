@@ -450,12 +450,10 @@ with tab1:
                     right_placeholder.altair_chart(chart, use_container_width=True)
 
                 # --- Examples & Word Breakdown ---
-                # --- Examples & Word Breakdown ---
                 st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
-                with st.expander("📄 View Top 5 Messages"):
-
-
+                show = st.toggle("📄 View Top 5 Messages")
+                if show:
                     examples = data.get("examples", [])
 
                     if not examples:
@@ -773,8 +771,8 @@ with tab2:
 
                 st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
-                with st.expander("📝 Top 5 Messages Comparison"):
-
+                show_msg = st.toggle("📝 Top 5 Messages Comparison"):
+                if show_msg:
                     compare = data.get("compare", {})
 
                     for period, content in compare.items():
