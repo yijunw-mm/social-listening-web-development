@@ -8,9 +8,11 @@ from keybert import KeyBERT
 from backend.model_loader import kw_model,encoder
 from sentence_transformers import SentenceTransformer, util 
 import spacy
+from backend.data_loader import load_chat_data
 
 router = APIRouter()
-df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
+#df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
+df_cleaned = load_chat_data()
 df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 df_cat = pd.read_csv("data/other_data/newest_brand_keywords.csv")
 brand_category_map = {

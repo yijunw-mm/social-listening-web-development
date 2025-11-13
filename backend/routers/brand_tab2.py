@@ -10,9 +10,11 @@ import re
 from keybert import KeyBERT
 from sentence_transformers import SentenceTransformer, util 
 import spacy
+from backend.data_loader import load_chat_data
 
 router = APIRouter()
-df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
+#df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
+df_cleaned = load_chat_data()
 df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 # load brand keywrod
 brand_keyword_df = pd.read_csv("data/other_data/newest_brand_keywords.csv",keep_default_na=False,na_values=[""])  
@@ -145,7 +147,40 @@ def remove_keyword(brand_name:str, keyword:str):
     else:
         return {"message":f"keyword '{keyword}' not found in brand '{brand_name}'."}
     
+# ====== sentiment analysis ==========
+with open ("data/other_data/rule.json","r",encoding="utf-8") as f:
+    CONFIG =json.load(f)['rules']
 analyzer = SentimentIntensityAnalyzer()
+
+def custom_rules(text, base_score):
+    compound = base_score["compound"]
+    t = text.lower()
+    applied = None
+
+    for rule in CONFIG:
+        for pattern in rule["patterns"]:
+            if re.search(pattern, t,re.IGNORECASE):
+                compound = max(-1.0, min(1.0, compound + rule["adjustment"]))
+                applied =rule['name']
+                break  # stop at first match
+        if applied: 
+            break
+
+    if compound >= 0.05:
+        sentiment = "positive"
+    elif compound <= -0.05:
+        sentiment = "negative"
+    else:
+        sentiment = "neutral"
+
+
+    return {
+        "compound": compound,
+        "sentiment": sentiment,
+        "rule":applied
+    }
+
+
 
 def explain_sentiment(text, top_n=5):
     """return the contribution"""
@@ -198,21 +233,19 @@ def brand_sentiment_analysis_vader(
     # 4. compute sentiment analysis
     sentiment_result = {"positive": 0, "neutral": 0, "negative": 0}
     detailed_examples= []
+
     for text in matched_texts:
-        score = analyzer.polarity_scores(text)
-        compound = score["compound"]
-        if compound >= 0.05:
-            sentiment_result["positive"] += 1
-        elif compound <= -0.05:
-            sentiment_result["negative"] += 1
-        else:
-            sentiment_result["neutral"] += 1
+        base = analyzer.polarity_scores(text)
+        adjusted = custom_rules(text,base)
+        sentiment_result[adjusted["sentiment"]]+=1
         
         # 4.5 explain the contribution
         explanation = explain_sentiment(text, top_n=5)
         detailed_examples.append({
             "text": text,
-            "sentiment_score": score,
+            "sentiment_score": adjusted["compound"],
+            "sentiment": adjusted["sentiment"],
+            "rule_applied":adjusted["rule"],
             "top_positive_words": explanation["positives"],
             "top_negative_words": explanation["negatives"]
         })

@@ -8,12 +8,14 @@ sys.path.append("..")
 from backend.model_loader import kw_model,encoder
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import random
+from backend.data_loader import load_chat_data
 
 router = APIRouter()
 #kw_model = KeyBERT(model='all-MiniLM-L6-v2')
 
 # load data
-df_chat = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
+#df_chat = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
+df_chat= load_chat_data()
 df_kw = pd.read_csv("data/other_data/general_kw_list.csv")
 keyword_list = df_kw['keywords'].tolist()
 df_stage= pd.read_csv("data/processing_output/groups.csv",dtype={"group_id":str})

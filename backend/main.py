@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.general_kw_analysis_tab1 import keyword_frequency, new_keyword_prediction
 import pandas as pd
 from backend import model_loader
+from backend.data_loader import load_chat_data
 
 from backend.routers import general_tab1
 from backend.routers import brand_tab2
@@ -18,7 +19,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+@app.on_event("startup")
+def startup_event():
+    _=load_chat_data()
+    
 @app.get("/")
 def root():
     return {"message": "Keyword API is running"}
