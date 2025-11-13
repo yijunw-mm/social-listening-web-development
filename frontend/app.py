@@ -10,7 +10,7 @@ import altair as alt
 from style import apply_custom_style
 import numpy as np
 import re
-
+import altair as alt
 
 
 st.set_page_config(page_title="Data Visualization Dashboard", layout="wide")
@@ -88,7 +88,6 @@ with st.sidebar:
     st.button("⚙️ Preferences")
     st.button("🔒 Logout")
 
-import altair as alt
 
 # --- Create theme function ---
 def no_background():
@@ -111,8 +110,10 @@ def no_background():
         }
     }
 
+# --- Register theme (Altair 5 correct way) ---
 alt.theme.register("no_background", no_background)
 
+# --- Enable theme globally ---
 alt.theme.enable("no_background")
 
 
