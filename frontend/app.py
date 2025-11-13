@@ -986,14 +986,7 @@ with tab3:
                 key="chart10_type_tab3"
             )
 
-            time_range = time_range_selector("Time", key="time_tab3_consumer")
-
-            if time_range and "month" in time_range and isinstance(time_range["month"], list):
-                time_range = {"year": time_range.get("year")}
-
-            params = {"category_name": category_name, "top_k": 20, **time_range}
-            if time_range:
-                params.update(time_range)
+            params = {"category_name": category_name, "top_k": 20}
 
             params = get_selected_group_ids(params)
 
