@@ -771,7 +771,7 @@ with tab2:
 
                 st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
-                show_msg = st.toggle("📝 Top 5 Messages Comparison"):
+                show_msg = st.toggle("📝 Top 5 Messages Comparison")
                 if show_msg:
                     compare = data.get("compare", {})
 
