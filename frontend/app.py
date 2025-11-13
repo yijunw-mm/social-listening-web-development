@@ -10,7 +10,7 @@ import altair as alt
 from style import apply_custom_style
 import numpy as np
 import re
-
+import altair as alt
 
 
 st.set_page_config(page_title="Data Visualization Dashboard", layout="wide")
@@ -124,9 +124,10 @@ sentiment_colors = {
 #group ids
 def get_selected_group_ids(params: dict = None) -> dict:
     params = params.copy() if params else {}
-    selected_group = st.session_state.get("selected_groups", [])
-    if selected_group:
+    selected_group = st.session_state.get("selected_groups", None)
+    if selected_group and len(selected_group) > 0:
         params["group_id"] = selected_group
+
     return params
 
 #render chart
@@ -872,15 +873,20 @@ with tab3:
             st.write("Consumer Perception Analysis")
             chart_type = st.selectbox(
                 "Select chart type",
-                ("Bar Chart","Pie Chart"),
+                ("Bar Chart", "Pie Chart"),
                 key="chart10_type_tab3"
-            )            
+            )
+
             params = {"category_name": category_name, "top_k": 20}
             params = get_selected_group_ids(params)
-            
+
+            key_name = f"removed_words_{category_name}_tab3"
+            if key_name not in st.session_state:
+                st.session_state[key_name] = []
+
             try:
                 df = api.get_category_consumer_perception(params=params)
-                
+
                 if df.empty:
                     st.warning(f"No consumer perception data returned for '{category_name}'. This category may have no brand mentions in the selected data.")
                 elif "error" in df.columns:
@@ -888,24 +894,66 @@ with tab3:
                 elif "word" not in df.columns or "count" not in df.columns:
                     st.error(f"Invalid data structure returned. Expected columns: 'word', 'count'. Got: {df.columns.tolist()}")
                 else:
-                    # Filter out words with zero count
-                    df_filtered = df[df["count"] > 0]
-                    
-                    if df_filtered.empty:
-                        st.warning("No meaningful keywords extracted for this category.")
+                    # --- Remove Words UI ---
+                    st.write("✂️ Remove Words from Chart")
+
+                    with st.form(key=f"{category_name}_remove_form_tab3", clear_on_submit=True):
+                        new_words_input = st.text_input(
+                            "Enter word(s) to remove (comma or space separated):",
+                            key=f"{category_name}_remove_input_tab3",
+                            placeholder="e.g. baby, fit, care"
+                        )
+                        submit_button = st.form_submit_button("Remove Words")
+
+                    if submit_button and new_words_input:
+                        words_to_add = [
+                            w.strip().lower()
+                            for w in re.split(r"[,\s]+", new_words_input.strip())
+                            if w.strip()
+                        ]
+                        added_count = 0
+                        for word in words_to_add:
+                            if word not in st.session_state[key_name]:
+                                st.session_state[key_name].append(word)
+                                added_count += 1
+
+                        if added_count > 0:
+                            st.success(f"✅ Removed {added_count} word(s) from chart")
+                            st.rerun()
+                        else:
+                            st.info("All entered words were already in the remove list")
+
+                    if st.session_state[key_name]:
+                        st.markdown("**Currently removed words:**")
+                        num_words = len(st.session_state[key_name])
+                        cols_per_row = 5
+                        for i in range(0, num_words, cols_per_row):
+                            cols = st.columns(min(cols_per_row, num_words - i))
+                            for j, col in enumerate(cols):
+                                if i + j < num_words:
+                                    word = st.session_state[key_name][i + j]
+                                    with col:
+                                        if st.button(f"✕ {word}", key=f"undo_{category_name}_tab3_{word}_{i}_{j}"):
+                                            st.session_state[key_name].remove(word)
+                                            st.success(f"✅ Added '{word}' back to chart")
+                                            st.rerun()
+
+                    # --- Filter Data ---
+                    if st.session_state[key_name]:
+                        pattern = "|".join([re.escape(w) for w in st.session_state[key_name]])
+                        df = df[~df["word"].str.contains(pattern, case=False, na=False)]
+
+                    if df.empty:
+                        st.warning("All words removed — nothing to display.")
                     else:
-                        chart = render_chart(df_filtered, chart_type, "word", "count", key_prefix="chart10_tab3")
+                        chart = render_chart(df, chart_type, "word", "count", key_prefix="chart10_tab3")
                         if chart:
                             st.altair_chart(chart, use_container_width=True)
-                            
-                            # Show summary
-                            st.caption(f"Total keywords: {len(df_filtered)} | Top keyword: '{df_filtered.iloc[0]['word']}' ({df_filtered.iloc[0]['count']} mentions)")
-                            
+                            st.caption(f"Total keywords: {len(df)} | Top keyword: '{df.iloc[0]['word']}' ({df.iloc[0]['count']} mentions)")
+
             except Exception as e:
                 st.error(f"Failed to fetch consumer perception data: {e}")
-        
-    else:
-        st.empty()
+
 
 
 

@@ -110,6 +110,8 @@ def compare_keyword_frequency(
 
         for text in context_texts:
             words = re.findall(r"\w+",text.lower())
+            if not isinstance(text, str):
+                return {}
             for kw in keywords:
                 if kw.lower() in words:
                     freq_counter[kw] += 1
