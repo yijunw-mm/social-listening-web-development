@@ -46,10 +46,7 @@ def remove_keyword(params:dict = None) -> pd.DataFrame:
 def get_sentiment_analysis(params=None):
     resp = requests.get(f"{base_api}/brand/sentiment-analysis", params=params, timeout=100)
     resp.raise_for_status()
-    data = resp.json()
-    if isinstance(data, dict) and "sentiment_percent" in data:
-        return pd.DataFrame(data["sentiment_percent"])
-    return pd.DataFrame(columns=["sentiment", "value"])
+    return resp.json()  
 @st.cache_data()
 def get_consumer_perception(params: dict = None) -> pd.DataFrame:
     url = f"{base_api}/brand/consumer-perception"

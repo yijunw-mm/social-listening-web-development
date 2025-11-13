@@ -532,7 +532,11 @@ with tab1:
             with col2:
                 time_range = time_range_selector("Time", key="time4")
 
-            params = {"brand_name": brand_name, **time_range} if time_range else {"brand_name": brand_name}
+                if time_range and "month" in time_range and isinstance(time_range["month"], list):
+                    time_range = {"year": time_range.get("year")}
+
+                params = {"brand_name": brand_name, **time_range} if time_range else {"brand_name": brand_name}
+
 
             key_name = f"removed_words_{brand_name}_tab1"
             if key_name not in st.session_state:
@@ -982,7 +986,15 @@ with tab3:
                 key="chart10_type_tab3"
             )
 
-            params = {"category_name": category_name, "top_k": 20}
+            time_range = time_range_selector("Time", key="time_tab3_consumer")
+
+            if time_range and "month" in time_range and isinstance(time_range["month"], list):
+                time_range = {"year": time_range.get("year")}
+
+            params = {"category_name": category_name, "top_k": 20, **time_range}
+            if time_range:
+                params.update(time_range)
+
             params = get_selected_group_ids(params)
 
             key_name = f"removed_words_{category_name}_tab3"
