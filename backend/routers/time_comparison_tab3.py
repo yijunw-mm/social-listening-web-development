@@ -104,7 +104,7 @@ def compare_keyword_frequency(
         
         context_texts = []
         for c in contexts:
-            context_texts.extend(c["context"])
+            context_texts.extend(t for t in c["context"] if isinstance(t,str))
         #counter = Counter()
         freq_counter = Counter()
 
