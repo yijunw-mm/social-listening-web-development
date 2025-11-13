@@ -126,9 +126,9 @@ def get_selected_group_ids(params: dict = None) -> dict:
     params = params.copy() if params else {}
     selected_group = st.session_state.get("selected_groups", None)
     if selected_group and len(selected_group) > 0:
-        params["group_id"] = selected_group
-
+        params["group_id"] = [str(g) for g in selected_group]   # ← Convert to STR
     return params
+
 
 #render chart
 def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""):
