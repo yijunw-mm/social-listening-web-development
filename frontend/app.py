@@ -88,6 +88,32 @@ with st.sidebar:
     st.button("⚙️ Preferences")
     st.button("🔒 Logout")
 
+import altair as alt
+
+# --- Create theme function ---
+def no_background():
+    return {
+        "config": {
+            "background": "white",
+            "view": {
+                "fill": "white",
+                "stroke": "transparent"
+            },
+            "axis": {
+                "domainColor": "black",
+                "labelColor": "black",
+                "titleColor": "black"
+            },
+            "legend": {
+                "labelColor": "black",
+                "titleColor": "black"
+            }
+        }
+    }
+
+alt.theme.register("no_background", no_background)
+
+alt.theme.enable("no_background")
 
 
 #TAB 1 - General Analysis
