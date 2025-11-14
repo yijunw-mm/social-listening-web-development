@@ -126,9 +126,9 @@ def get_selected_group_ids(params: dict = None) -> dict:
     params = params.copy() if params else {}
     selected_group = st.session_state.get("selected_groups", None)
     if selected_group and len(selected_group) > 0:
-        params["group_id"] = selected_group
-
+        params["group_id"] = [str(g) for g in selected_group]   # ← Convert to STR
     return params
+
 
 #render chart
 def render_chart(df, chart_type, x_field, y_field, color="#A7C7E7",key_prefix=""):
@@ -450,9 +450,10 @@ with tab1:
                     right_placeholder.altair_chart(chart, use_container_width=True)
 
                 # --- Examples & Word Breakdown ---
-                st.markdown("<br>", unsafe_allow_html=True)
-                with st.expander("📄 View Top 5 Messages"):
+                st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
+                show = st.toggle("📄 View Top 5 Messages")
+                if show:
                     examples = data.get("examples", [])
 
                     if not examples:
@@ -768,10 +769,10 @@ with tab2:
                     if chart:
                         sentiment_placeholder.altair_chart(chart, use_container_width=True)
 
-                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
-                with st.expander("📝 Top 5 Messages Comparison"):
-
+                show_msg = st.toggle("📝 Top 5 Messages Comparison")
+                if show_msg:
                     compare = data.get("compare", {})
 
                     for period, content in compare.items():
@@ -1051,6 +1052,7 @@ with tab5:
                 elif "word" not in df.columns or "count" not in df.columns:
                     st.error(f"Invalid data structure returned. Expected columns: 'word', 'count'. Got: {df.columns.tolist()}")
                 else:
+                    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
                     # --- Remove Words UI ---
                     st.write("✂️ Remove Words from Chart")
 
