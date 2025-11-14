@@ -183,9 +183,10 @@ def category_consumer_perception(category_name:str,
     if not brand_in_category:
         return {"error":f"category '{category_name}' not found"}
     
-    df = df_cleaned.copy()
+    df = df_cleaned
     if group_id:
         df = df[df["group_id"].isin(group_id)]
+    df = df_cleaned.copy()
     #  extract brand name relevant text
     pattern = "|".join([rf"\b{re.escape(b)}\b" for b in brand_in_category])
     relevant_texts = (

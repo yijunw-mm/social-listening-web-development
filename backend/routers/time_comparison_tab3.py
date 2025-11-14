@@ -241,14 +241,16 @@ def keyword_frequency(
     total_mentions2 = len(text2)
 
     sentiment_percent_list1 = [{
-        "sentiment":k,"value": round(v / total_mentions1 * 100, 1)} for k, v in sentiment_result1.items()
+        "sentiment":k,"value": round(v / total_mentions1 * 100, 1) if total_mentions1>0 else 0
+        } for k, v in sentiment_result1.items()
     ]
     sentiment_count_list1 =[
         {"sentiment":k, "value":v} for k,v in sentiment_result1.items()
     ]
 
     sentiment_percent_list2 = [{
-        "sentiment":k,"value": round(v / total_mentions2 * 100, 1)} for k, v in sentiment_result2.items()
+        "sentiment":k,"value": round(v / total_mentions2 * 100, 1) if total_mentions2>0 else 0
+        } for k, v in sentiment_result2.items()
     ]
     sentiment_count_list2 =[
         {"sentiment":k, "value":v} for k,v in sentiment_result2.items()
