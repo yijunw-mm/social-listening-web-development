@@ -948,9 +948,8 @@ with tab4:
             # Stage and Time Range
             stage = st.selectbox(
                 "Select Stage",
-                ("None", "Pregnant (0 to 9 months)", "Weaning (4 to 16 months)",
-                "Infant (1 to 18 months)", "Preschool (18 months to 5yo)",
-                "Enrichment (3 to 6yo)", "Current Month"),
+                ("None", "Pregnant(0 to 9 months)", "Weaning(4 to 16 months)",
+                "Infant(1 to 18 months)", "Current Month"),
                 key="stage_select_tab4",
                 index=0
             )
