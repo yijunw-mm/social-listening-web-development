@@ -177,6 +177,12 @@ def explain_sentiment(text, top_n=5):
 
     return {"positives": positives, "negatives": negatives}
 
+# add safety checker of total mentions
+def safe_percent(v,total):
+        if total == 0:
+            return 0
+        return round(v/total*100, 1)
+
 @router.get("/brand/time-compare/sentiment")
 def keyword_frequency(
     brand_name: str,
@@ -240,10 +246,6 @@ def keyword_frequency(
     total_mentions1 = len(text1)
     total_mentions2 = len(text2)
 
-    def safe_percent(v,total):
-        if total == 0:
-            return 0
-        return round(v/total*100, 1)
     
     sentiment_percent_list1 = [{
         "sentiment":k,"value": safe_percent(v,total_mentions1)
