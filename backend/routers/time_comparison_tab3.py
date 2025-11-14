@@ -203,6 +203,9 @@ def keyword_frequency(
     def analyze_sentiment(texts):
         sentiment_result = {"positive": 0, "neutral": 0, "negative": 0}
         detailed_examples= []
+        if not texts:
+            return sentiment_result, detailed_examples
+        
         for text in texts:
             base = analyzer.polarity_scores(text)
             adjusted = custom_rules(text,base)
@@ -262,25 +265,45 @@ def keyword_frequency(
     sentiment_count_list2 =[
         {"sentiment":k, "value":v} for k,v in sentiment_result2.items()
     ]
+    
+    empty_block = {"total_mentions": 0, "sentiment_percent": [], "sentiment_count": [], "examples": []}
+
+
+    # two result block
+    block1 = (
+        empty_block
+        if total_mentions1 == 0
+        else {
+            "total_mentions": total_mentions1,
+            "sentiment_percent": sentiment_percent_list1,
+            "sentiment_count": sentiment_count_list1,
+            "examples": detailed_examples1[:5],
+        }
+    )
+
+
+    block2 = (
+        empty_block
+        if total_mentions2 == 0
+        else {
+            "total_mentions": total_mentions2,
+            "sentiment_percent": sentiment_percent_list2,
+            "sentiment_count": sentiment_count_list2,
+            "examples": detailed_examples2[:5],
+        }
+    )
+
+
+    
     return {
         "brand": brand_name,
         "granularity": granularity,
         "compare": {
-            str(time1): {
-                "total_mentions": total_mentions1,
-                "sentiment_percent": sentiment_percent_list1,
-                "sentiment_count": sentiment_count_list1,
-                "examples": detailed_examples1[:5]
-            },
-            str(time2): {
-                "total_mentions": total_mentions2,
-                "sentiment_percent": sentiment_percent_list2,
-                "sentiment_count": sentiment_count_list2,
-                "examples": detailed_examples2[:5]
-            }
-        }
-
+            str(time1): block1,
+            str(time2): block2,
+        },
     }
+
 
 
 def _normalize_quotes(s: str) -> str:
