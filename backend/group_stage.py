@@ -6,7 +6,7 @@ import calendar
 from dateutil.relativedelta import relativedelta
 
 
-# -------- helpers: 群名 -> due_date + stage --------
+# -------- helpers: group name -> due_date + stage --------
 
 def parse_group_name(group_name: str):
     group_name=str(group_name)
@@ -51,7 +51,7 @@ def get_stage(group_name: str, today: datetime = None):
 
 # -------- build df_groups from ingestion output --------
 def build_groups_from_messages(messages_csv: str, output_csv: str, today: datetime = None):
-    df = pd.read_csv(messages_csv)
+    df = pd.read_parquet(messages_csv)
     groups = []
     for group_id,group_name in df[["group_id","group_name"]].drop_duplicates().values:
         due_date = parse_group_name(group_name)
@@ -70,8 +70,8 @@ def build_groups_from_messages(messages_csv: str, output_csv: str, today: dateti
 
 # -------- test run --------
 if __name__ == "__main__":
-    input_path = "data/processing_output/structure_chat/2025/structured_chat.csv"
-    output_path = "data/processing_output/groups.csv"
+    input_path = "data/processing_output/clean_chat_df/cleaned_chat_df2425.parquet"
+    output_path = "data/processing_output/groups2.csv"
     build_groups_from_messages(input_path, output_path)
 
 

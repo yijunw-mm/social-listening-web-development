@@ -109,11 +109,9 @@ def compare_keyword_frequency(
         freq_counter = Counter()
 
         for text in context_texts:
-            words = re.findall(r"\w+",text.lower())
-            if not isinstance(text, str):
-                return {}
+            t = text.lower()
             for kw in keywords:
-                if kw.lower() in words:
+                if re.search(rf"\b{re.escape(kw.lower())}\b", t):
                     freq_counter[kw] += 1
         if not freq_counter:
             all_words = " ".join(context_texts).split()
@@ -351,12 +349,13 @@ def category_share_of_voice_compare(
 ):
     #find the category
     df_cat = pd.read_csv("data/other_data/newest_brand_keywords.csv")
-    brand_category_map = {
-    str(row["brand"]).strip().lower(): str(row["category"]).strip()
-    for _, row in df_cat.iterrows()
-    }
+    brand_category_map = defaultdict(list)
+    for _,row in df_cat.iterrows():
+        brand = str(row["brand"]).strip().lower()
+        category = str(row["category"]).strip()
+        brand_category_map[brand].append(category)
 
-    brand_in_category = [b for b, c in brand_category_map.items() if c == category_name]
+    brand_in_category = [b for b, cats in brand_category_map.items() if category_name in cats]
     if not brand_in_category:
         return {"error": f"category '{category_name}' not found"}
 

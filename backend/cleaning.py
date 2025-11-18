@@ -58,10 +58,10 @@ def clean_dataframe(df:pd.DataFrame,slang_dict=None) ->pd.DataFrame:
 if __name__=="__main__":
     df_slang=pd.read_csv("data/other_data/slang_to_formal.csv")
     slang_dict = dict(zip(df_slang['slang'].str.lower(),df_slang['formal'].str.lower()))
-    df = pd.read_csv("data/processing_output/structure_chat/2025/structured_chat.csv")
+    df = pd.read_csv("data/processing_output/structure_chat/2024/structured_chat.csv")
 
     df_cleaned = clean_dataframe(df,slang_dict)
-    output_path = "data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv"
+    output_path = "data/processing_output/clean_chat_df/2024/cleaned_chat_dataframe.csv"
     df_cleaned.to_csv(output_path,index=False)
     print(f"✅save to {output_path}")
     

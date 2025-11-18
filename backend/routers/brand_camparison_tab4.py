@@ -15,10 +15,13 @@ router = APIRouter()
 df_cleaned = load_chat_data()
 df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 df_cat = pd.read_csv("data/other_data/newest_brand_keywords.csv")
-brand_category_map = {
-    str(row["brand"]).strip().lower(): str(row["category"]).strip()
-    for _, row in df_cat.iterrows()
-}
+brand_category_map = defaultdict(list)
+for _,row in df_cat.iterrows():
+    brand = str(row["brand"]).strip().lower()
+    categories = [c.strip() for c in str(row["category"]).split(",")]
+    for category in categories:
+        brand_category_map[brand].append(category)
+
 brand_list = list(brand_category_map.keys())
 
 
@@ -70,12 +73,11 @@ def get_share_of_voice(group_id:Optional[List[str]]=Query(None)):
     # 2.map to category
     category_counts = defaultdict(dict)
     for brand, count in counts.items():
-        category = brand_category_map.get(brand)
-        if category:
+        categories = brand_category_map.get(brand, [])
+        for category in categories:
             category_counts[category][brand] = count
 
 
-    
     result = {}
     for category, brand_counts in category_counts.items():
         total = sum(brand_counts.values())
@@ -138,25 +140,19 @@ def extract_clean_brand_keywords_auto(texts, brand_name, top_k=15):
         stop_words='english'
     )]
 
-    # Step 3️⃣ POS keep noun, adj
-    def is_meaningful(phrase):
-        doc = nlp(phrase)
-        return any(t.pos_ in ["ADJ", "NOUN"] for t in doc)
-    keywords = [kw for kw in keywords if is_meaningful(kw)]
+    docs = list(nlp.pipe(keywords, disable=["ner"]))
+    keywords = [kw for kw, doc in zip(keywords, docs)
+                if any(t.pos_ in ["ADJ", "NOUN"] for t in doc)]
 
-    # Step 4️⃣ calculate semantic centre
     if not keywords:
         return []
+
     kw_emb = encoder.encode(keywords, convert_to_tensor=True)
     centroid = kw_emb.mean(dim=0, keepdim=True)
-
-    # Step 5️⃣ calculate similarity of each word and the centre
     sims = util.cos_sim(kw_emb, centroid).flatten()
     filtered_keywords = [kw for kw, sim in zip(keywords, sims) if sim > 0.3]
-    #new_add
-    filtered_keywords = remove_overlapping_phrases(filtered_keywords,overlap_ratio=0.5)
+    filtered_keywords = remove_overlapping_phrases(filtered_keywords, overlap_ratio=0.5)
 
-    # Step 6️⃣ count the frequency in original text
     counts = Counter()
     for text in texts:
         t = text.lower()
@@ -168,9 +164,11 @@ def extract_clean_brand_keywords_auto(texts, brand_name, top_k=15):
     return results
 
 
+
 category_brand_map=defaultdict(list)
-for brand, cat in brand_category_map.items():
-    category_brand_map[cat].append(brand)
+for brand, cats in brand_category_map.items():
+    for cat in cats:
+        category_brand_map[cat].append(brand)
 
 #-----------------------------------------
 
@@ -179,7 +177,7 @@ brand_keyword_dict = df_cat.groupby("brand")["keyword"].apply(list).to_dict()
 def category_consumer_perception(category_name:str, 
                                  top_k:int=20, 
                                  group_id:Optional[List[str]]=Query(None)):
-    brand_in_category = [b for b,c in brand_category_map.items() if c==category_name]
+    brand_in_category = [b for b,cats in brand_category_map.items() if category_name in cats]
     if not brand_in_category:
         return {"error":f"category '{category_name}' not found"}
     

@@ -135,11 +135,11 @@ def process_multiple_zips(folder_path: str) -> pd.DataFrame:
 # 6️⃣ Main entry
 # -----------------------------
 if __name__ == "__main__":
-    folder = "data/chat_zip/2025"
+    folder = "data/chat_zip/2024"
     df_chats = process_multiple_zips(folder)
     print(f"📊 Total loaded messages: {len(df_chats)}")
 
-    output_path = "data/processing_output//structure_chat/2025/structured_chat.csv"
+    output_path = "data/processing_output//structure_chat/2024/structured_chat.csv"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df_chats.to_csv(output_path, index=False, encoding="utf-8-sig")
     print(f"💾 Saved to {output_path}")
