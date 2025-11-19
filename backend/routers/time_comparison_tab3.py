@@ -180,7 +180,7 @@ def explain_sentiment(text, top_n=5,matched_rule=None):
                         # remove //
                         hit = re.sub(r"\\b", "", hit).strip()
                         scored_words.append((hit, adj))
-                        break  # 命中后退出当前 rule
+                        break  
                 break
     positives = sorted([x for x in scored_words if x[1] > 0], key=lambda x: -x[1])[:top_n]
     negatives = sorted([x for x in scored_words if x[1] < 0], key=lambda x: x[1])[:top_n]
