@@ -34,6 +34,8 @@ def set_active_tab(label):
 with st.sidebar:
     st.title("Social Listening")
 
+    st.write("Select Years To Analyze")
+
     st.markdown("---") 
     st.write("Select Data Files")
     try: 
@@ -314,7 +316,6 @@ def manage_keywords(placeholder, session_key, brand_name):
             if search_keyword in st.session_state[session_key]:
                 st.warning(f"'{search_keyword}' is already added.")
                 return
-
             try:
                 api.add_keyword(params={"brand_name": brand_name, "keyword": search_keyword})
                 st.session_state[session_key].append(search_keyword)
@@ -354,7 +355,7 @@ with tab1:
 
         brand_name = st.selectbox(
             "Select Brand",
-            ('mamypoko','huggies','pampers','drypers','merries','offspring','rascal & friends','applecrumby','hey tiger','nino nana',
+            ('mamypoko','huggies','pampers','drypers','merries','offspring','rascal & friends','applecrumby','hey tiger','nino nana','similac',
     'homie','nan','lactogen','friso','enfamil','aptamil','s26','dumex dugro','bellamy organic','karihome','mount alvernia',
     'thomson medical centre','mount elizabeth','gleneagles','raffles hospital','national university hospital',
     'kkh','parkway east hospital','singapore general hospital','sengkang general hospital','changi general hospital',
@@ -477,7 +478,7 @@ with tab1:
 
 
         
-        #CONSUMER PERCEPTIOn
+        #CONSUMER Perception
         with st.container(border=True):
             st.write("Consumer Perception Analysis")
             bottom_placeholder = st.empty()
@@ -594,7 +595,7 @@ with tab2:
         with st.container(border=True):
             brand_name = st.selectbox(
             "Select Brand",
-            ('mamypoko','huggies','pampers','drypers','merries','offspring','rascal & friends','applecrumby','hey tiger','nino nana',
+            ('mamypoko','huggies','pampers','drypers','merries','offspring','rascal & friends','applecrumby','hey tiger','nino nana','similac',
     'homie','nan','lactogen','friso','enfamil','aptamil','s26','dumex dugro','bellamy organic','karihome','mount alvernia',
     'thomson medical centre','mount elizabeth','gleneagles','raffles hospital','national university hospital',
     'kkh','parkway east hospital','singapore general hospital','sengkang general hospital','changi general hospital',
