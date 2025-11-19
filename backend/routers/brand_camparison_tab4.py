@@ -11,16 +11,14 @@ import spacy
 from backend.data_loader import load_chat_data
 
 router = APIRouter()
-#df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
 df_cleaned = load_chat_data()
 df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 df_cat = pd.read_csv("data/other_data/newest_brand_keywords.csv")
 brand_category_map = defaultdict(list)
 for _,row in df_cat.iterrows():
     brand = str(row["brand"]).strip().lower()
-    categories = [c.strip() for c in str(row["category"]).split(",")]
-    for category in categories:
-        brand_category_map[brand].append(category)
+    category = str(row["category"]).split(",")[0].strip().lower()
+    brand_category_map[brand].append(category)
 
 brand_list = list(brand_category_map.keys())
 
@@ -36,7 +34,6 @@ def _normalize_quotes(s: str) -> str:
          .replace("'", "")
          .strip()
     )
-
 
 def _build_keyword_pattern(kw: str) -> re.Pattern:
     k = _normalize_quotes(kw)
@@ -68,7 +65,6 @@ def get_share_of_voice(group_id:Optional[List[str]]=Query(None)):
 
     # 1. count brand frequency
     counts = count_kw(df["clean_text"].dropna(), brand_list)
-
 
     # 2.map to category
     category_counts = defaultdict(dict)

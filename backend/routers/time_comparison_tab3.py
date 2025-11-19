@@ -8,7 +8,6 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from backend.data_loader import load_chat_data
 
 router = APIRouter()
-#df_cleaned = pd.read_csv("data/processing_output/clean_chat_df/2025/cleaned_chat_dataframe.csv",dtype={"group_id":str})
 df_cleaned = load_chat_data()
 df_cleaned['clean_text']=(df_cleaned['clean_text'].str.replace(r"\s+'s","'s",regex=True))
 # load brand keywrod
@@ -161,7 +160,7 @@ def custom_rules(text, base_score):
 
     return {"compound": compound, "sentiment": sentiment, "rule":applied}
 
-def explain_sentiment(text, top_n=5):
+def explain_sentiment(text, top_n=5,matched_rule=None):
     """return the contribution"""
     words = re.findall(r"\b\w+\b", text.lower())
     scored_words = []
@@ -169,7 +168,15 @@ def explain_sentiment(text, top_n=5):
         if w in analyzer.lexicon:  # there is a score in VADER dictionary
             score = analyzer.lexicon[w]
             scored_words.append((w, score))
-
+    if matched_rule:
+        for rule in CONFIG:
+            if rule["name"] == matched_rule:
+                for p in rule["patterns"]:
+                    if re.search(p, text, re.IGNORECASE):
+                        adj = rule["adjustment"]
+                        clean_p = re.sub(r"\\b","",p)
+                        scored_words.append((clean_p.strip(), adj))
+                        break
     positives = sorted([x for x in scored_words if x[1] > 0], key=lambda x: -x[1])[:top_n]
     negatives = sorted([x for x in scored_words if x[1] < 0], key=lambda x: x[1])[:top_n]
 
@@ -210,7 +217,7 @@ def keyword_frequency(
             sentiment_result[adjusted["sentiment"]]+=1
             
             # 4.5 explain the contribution
-            explanation = explain_sentiment(text, top_n=5)
+            explanation = explain_sentiment(text, top_n=5,matched_rule=adjusted["rule"])
             detailed_examples.append({
                 "text": text,
                 "sentiment_score": adjusted["compound"],
@@ -266,6 +273,19 @@ def keyword_frequency(
     
     empty_block = {"total_mentions": 0, "sentiment_percent": [], "sentiment_count": [], "examples": []}
 
+    examples1 = []
+    for sentiment in ["positive", "neutral", "negative"]:
+        subset1 = [d for d in detailed_examples1 if d["sentiment"] == sentiment]
+        # take 2 from each sentiment 
+        examples1.extend(sorted(subset1, key=lambda x: abs(x["sentiment_score"]), reverse=True)[:2])
+    examples1 = examples1[:5]  # maximum 5 msg
+
+    examples2 = []
+    for sentiment in ["positive", "neutral", "negative"]:
+        subset2 = [d for d in detailed_examples2 if d["sentiment"] == sentiment]
+        # take 2 from each sentiment 
+        examples2.extend(sorted(subset2, key=lambda x: abs(x["sentiment_score"]), reverse=True)[:2])
+    examples2 = examples2[:5]  # maximum 5 msg
 
     # two result block
     block1 = (
@@ -275,7 +295,7 @@ def keyword_frequency(
             "total_mentions": total_mentions1,
             "sentiment_percent": sentiment_percent_list1,
             "sentiment_count": sentiment_count_list1,
-            "examples": detailed_examples1[:5],
+            "examples": examples1,
         }
     )
 
@@ -287,7 +307,7 @@ def keyword_frequency(
             "total_mentions": total_mentions2,
             "sentiment_percent": sentiment_percent_list2,
             "sentiment_count": sentiment_count_list2,
-            "examples": detailed_examples2[:5],
+            "examples": examples2,
         }
     )
 
