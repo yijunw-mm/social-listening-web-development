@@ -410,7 +410,7 @@ with tab1:
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
 
-
+        
         #SENTIMENT ANALYSIS
         with st.container(border=True):
             st.write("Sentiment Analysis %")
@@ -460,18 +460,58 @@ with tab1:
                     if not examples:
                         st.info("No sample messages detected.")
                     else:
-                        for i, ex in enumerate(examples[:5]):
+                        if "edited_sentiments" not in st.session_state:
+                            st.session_state.edited_sentiments = [
+                             {"text": ex["text"], "sentiment": ex["sentiment"], "score": float(ex["sentiment_score"])} 
+                             for ex in examples[:5] ]
+                        for i, ex in enumerate(st.session_state.edited_sentiments):
                             with st.container(border=True):
                                 st.markdown(f"#### ✉️ Message {i+1}")
-
-                                # Show the actual text
                                 st.markdown(f"**Text:** {ex['text']}")
+                                #current score 
 
-                                # Sentiment info
                                 st.markdown(
                                     f"**Sentiment:** `{ex['sentiment']}`  | "
-                                    f"**Score:** `{ex['sentiment_score']}`  | "
+                                    f"**Score:** `{ex['score']:.2f}`"
                                 )
+
+                                #edit score
+                                col1, col2 = st.columns([1,1])
+                                with col1:
+                                    if st.button("➕", key=f"inc_{i}"):
+                                        st.session_state.edited_sentiments[i]["score"] = min(1.0, ex["score"] + 0.1)
+                                with col2:
+                                    if st.button("➖", key=f"dec_{i}"):
+                                        st.session_state.edited_sentiments[i]["score"] = max(0.0, ex["score"] - 0.1)
+
+                                score = st.session_state.edited_sentiments[i]["score"]
+                                if score >= 0.05:
+                                    st.session_state.edited_sentiments[i]["sentiment"] = "positive"
+                                elif score <= -0.05:
+                                    st.session_state.edited_sentiments[i]["sentiment"] = "negative"
+                                else:
+                                    st.session_state.edited_sentiments[i]["sentiment"] = "neutral"
+
+                    if st.button("Update Chart"):
+                        sentiment = [ex["sentiment"] for ex in st.session_state.edited_sentiments]
+                        counts = {
+                        "positive":sentiment.count("positive"),
+                        "neutral": sentiment.count("neutral"),
+                        "negative":sentiment.count("negative")
+                    }
+                        total = sum(counts.values())
+                        
+                        sentiment_percent_updated = [
+                            {"sentiment": k, "value": round((v/total) * 100, 1)}
+                            for k, v in counts.items()
+                        ]
+                        
+                        df_updated = pd.DataFrame(sentiment_percent_updated)
+
+                        updated_chart = render_chart(df_updated, "Pie Chart", "sentiment", "value", key_prefix="updated_sent_chart")
+                        right_placeholder.altair_chart(updated_chart, use_container_width=True)
+
+                        st.success("Sentiment chart updated!")
 
             except Exception as e:
                 st.error(f"Failed to fetch data: {e}")
